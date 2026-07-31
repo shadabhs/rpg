@@ -782,13 +782,25 @@ No app store, engine, or license fees, ever.
 
 ## Open items
 
-None block Phase 0. Each is decidable when its phase arrives:
+None block Phase 0. Each is decidable when its phase arrives.
+
+**Resolved in Phase 1** (`lib/engine/rules.ts`, all covered by unit tests in
+`lib/engine/reducer.test.ts`):
+
+- XP curve: `xpCostForLevel(level) = round(60 × level^1.5)` — steep on
+  purpose, so "Level 1 must feel weak" holds beyond just starting stats.
+- Weekly XP cap: 1,500, sized against a genuinely active week (~1,400 XP)
+  so real use isn't throttled, while farming Trivials is.
+- Tier thresholds: levels [1, 10, 20, 35, 50] for Tiers I–V; Tier V
+  additionally requires Integrity ≥ 80. Resolved ahead of its Phase 2 slot
+  because the reducer's `tier` field needed a real gate to exist and be
+  tested from the start, not stubbed.
+
+Still open:
 
 | Item | Needed by |
 |---|---|
-| XP curve and level thresholds (actual numbers) | Phase 1 |
 | Launch character roster size | Phase 2 |
-| Tier thresholds, and the Integrity bar for Tier V | Phase 2 |
 | Starting vice list and facet taxonomy refinement | Phase 2 |
 | Vault tier multiplier, and default Measure set per domain | Phase 2 |
 | Whether the Codex can be shared with chosen people, or stays strictly private | Phase 2/3 |
