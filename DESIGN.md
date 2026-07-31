@@ -1,6 +1,7 @@
 # The System — Design Decisions & Build Roadmap
 
-> Status: design complete, no code written yet. This is the decision record.
+> Status: **Phase 0 built and pushed.** This is the decision record — canonical for all
+> product decisions.
 
 ## Context
 
@@ -639,7 +640,7 @@ Each phase ends with something that works. Hours are the author's time, not Clau
 
 | Phase | Deliverable | Effort |
 |---|---|---|
-| **0 — Feel test** | Status Window with fake data, placeholder silhouette avatar + a fake tier-up transformation, panel scan-in, counting XP, bar overshoot, level-up hold, sound + haptics, dummy Verification Screen. No login, no DB, no AI, no real art. Sole question: does it feel good and does the tone land? Disposable on purpose. | **4–6 h** |
+| **0 — Feel test** ✅ | Status Window with fake data, placeholder silhouette avatar + tier-up transformation, panel scan-in, counting XP, bar overshoot, level-up hold, synthesized sound + haptics, Verification Screen. No login, no DB, no AI, no real art. **Built.** Now awaiting the only verdict that matters: does it feel good and does the tone land? Disposable on purpose. | **done** |
 | **1 — MVP** | Auth, DB, ~10-min Induction, seven attributes, four quest types, XP, levels, streaks, decay, Verification Screen, Integrity, Codex + Markdown export, daily close-out ritual. Installable on phone. Daily-usable. | **35–55 h** |
 | **2 — Depth** | **Measures + `[CALIBRATION]`** (ciphers, per-measure privacy, vault tiers, derived readouts), **Vices** (clean streaks, cumulative clean days, no-penalty relapse logging, declared replacements), character roster + ~40 tier illustrations, live aura layer, gold, loot, items, equipment, shop, achievements, titles, seasons + seasonal focus + Season of Endurance, seasonal audit, Reality Check, in-app Codex journal, private token URL, sound and animation polish, admin content tooling. | **62–92 h** |
 | **3 — Safe for others** | Induction tuned against real drop-off data, privacy controls, transparency page, email, export/delete, error tracking, analytics, abuse handling, LLM cost controls. | **25–40 h** |
@@ -771,7 +772,7 @@ None block Phase 0. Each is decidable when its phase arrives:
 
 Cadence is "whenever I feel like it," so gaps are planned for:
 
-- `CLAUDE.md` will hold the domain model, the covenant, the tone spec, and the AI boundary —
-  the highest-leverage file in the repo.
+- `AGENTS.md` (loaded via `CLAUDE.md`) holds the domain model, the covenant, the tone spec,
+  the AI boundary and the design invariants — the highest-leverage file in the repo.
 - A running decisions log, so returning after three weeks isn't a re-derivation.
 - Phases sized so no stretch leaves the app broken.
