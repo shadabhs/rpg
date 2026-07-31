@@ -228,6 +228,38 @@ SAVINGS RATE  (income − burn) ÷ income
 Runway is the preferred headline once burn is tracked — it normalises across every income
 level and moves when spending is cut, not only when earnings rise.
 
+##### Burn is declared, not tracked
+
+Per-transaction expense tracking is the highest-friction thing in this spec and the first
+thing anyone abandons. So **burn is a single declared figure**, revisited on a cadence —
+roughly 30 seconds a month instead of daily data entry.
+
+**The failure this must design against: a stale burn is a comfortable lie.** Runway looks
+healthy because it is computed on a figure from eight months ago, when spending was lower.
+A confidently wrong number is worse than an absent one.
+
+- **Staleness propagates.** Exactly like privacy inheritance — if burn is stale, every
+  readout derived from it is stale. Stated plainly, never hidden:
+  `[STALE] Burn last confirmed 74 days ago. Runway below is estimated on old data.`
+- **The reminder lives in the close-out ritual**, not a push notification. Ongoing induction
+  already asks a question or two during the daily ritual; burn confirmation is one of those
+  questions, once a month. No new surface, no new notification, nothing that nags.
+- **Confirming is one tap** — *"Still ₹X/month?"* → `[UNCHANGED]` / `[ADJUST]`. Unchanged
+  counts as a calibration and clears staleness.
+- **Cadence is configurable** — monthly by default, quarterly for stable spending.
+
+**No XP for calibrating.** Updating a Measure is app maintenance, not a real-world
+achievement; rewarding it would be celebrating engagement.
+
+**But revising burn upward grants Integrity.** Admitting you spend more than you claimed is
+the same category as retracting a claim or choosing NOT YET — an inconvenient truth,
+volunteered. Confirming unchanged or revising downward grants nothing.
+
+**Never invent a burn figure.** No "assume 70% of income" default. Induction asks for a
+rough monthly figure (most people are within 20% without tracking anything); if it is
+skipped, burn stays unset and **runway simply does not render**. A derived readout built on
+a guessed input is a fabricated number, which is the one thing this app cannot do.
+
 > **Privacy inheritance:** a derived readout takes the **strictest** privacy of its inputs
 > and cannot be loosened. Otherwise an ungated Runway leaks a PIN-gated Liquid to anyone
 > who knows the burn rate. The same rule binds notifications and the Codex export — a

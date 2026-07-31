@@ -85,6 +85,10 @@ Hierarchy: **Domain → Facet → Epic → Milestone → Habit/Quest**
   earn XP; valuations never do (market movement is not an action). Privacy is
   per-measure, and a derived readout inherits the strictest privacy of its
   inputs, or an ungated Runway leaks a gated Liquid.
+- **Never fabricate an input to a derived readout.** No assumed defaults. If
+  burn is undeclared, runway doesn't render. Staleness propagates like privacy
+  does, and is stated plainly — a confidently wrong number is worse than an
+  absent one.
 - **Bonds quests are about your actions, never outcomes** you don't control.
 - **The avatar may never depict something you haven't earned.**
 
