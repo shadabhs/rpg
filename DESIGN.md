@@ -26,10 +26,13 @@ is the product. Every design decision is judged against it.
 | **Platform** | Web app, mobile-first, installable PWA | Habits need phone + push; epics and charts need desktop. One codebase, no store review, instant updates during the design-heavy phase. |
 | **Game engine** | **None.** Plain web app. | Lists, forms, numbers, animation — no physics or realtime rendering. An engine breaks text input, accessibility, links, SEO for zero benefit. Phaser optional later for one map scene. |
 | **Failure model** | Slow decay on absence only | Nothing for 3 days. Gentle rust after 7. Capped ~15%, never lose a level permanently. One-tap "I'm back." |
-| **Character** | Life-domain attributes | Strength (fitness), Intellect (learning), Discipline (habits), Wealth (career), Spirit (health/mind), Charisma (relationships), **Integrity** (honesty). |
-| **Content types** | All four | Daily habits · long-term epics with milestones · work/project tasks · measured numbers with targets. |
+| **Character** | Six life domains + Integrity | **Vitality** (body), **Mind** (inner life), **Craft** (work/means), **Bonds** (relationships), **Spirit** (meaning), **Virtue** (character) — plus **Integrity**, earned only through honesty with the System. See "The life model". |
+| **Content types** | All four, plus vices | Daily habits · epics with milestones · work/project tasks · measured numbers with targets · **vices** (abstinence, separate mechanic, Phase 2). |
 | **Social** | Solo now, architected for later | Private today; `visibility` flags and user-scoped schema from day one. |
 | **Aesthetic** | Dark fantasy "System" (Solo Leveling) | Blue holographic panels, terminal notifications — `[QUEST COMPLETE]`, `[LEVEL UP]`. A system that plainly states what it is doing. Cheapest path to looking genuinely great (typography + glow, not illustration). |
+| **Avatar** | Anime-style, serious. Selectable, **purely cosmetic**. 5 tiers per character. | Starts plain and becomes impressive only through earned progress — so it doesn't lie, it *is* the covenant made visible. Cosmetic-only because a class perk is power granted for free, and because nobody can know at Induction which life they'll actually live. |
+| **Home screen** | Status Window (character sheet) | Most striking opening and the reason to open it daily; Real-World Ledger one scroll down keeps reality present. |
+| **Sound / haptics** | On by default, one-tap mute | Where game feel lives; nobody discovers audio that ships muted. Mute control persistent and obvious. |
 | **AI layer** | Yes — narrative only, never numeric | See "The AI boundary". |
 | **Interview transcript** | Derived then **discarded**; Codex kept encrypted | The transcript is a confession; the Codex is the useful distillate. Keeping only the Codex gives the System memory without the liability. |
 | **Honesty enforcement** | Challenge big claims, not small ones | Dailies stay one-tap. Milestones, level-ups, epic completions get full verification. Audit everything and the user quits in a week. |
@@ -62,7 +65,7 @@ facts about reality.
 | A normal app says | The System says |
 |---|---|
 | "🎉 30 day streak! You're on fire!" | `[RECORD] Trained 30 consecutive days. Last year's best: 11.` |
-| "Welcome back! We missed you!" | `[STATUS] 9 days absent. Strength has rusted 6%. Nothing else was lost.` |
+| "Welcome back! We missed you!" | `[STATUS] 9 days absent. Vitality has rusted 6%. Nothing else was lost.` |
 | "Keep going, you've got this!" | `[EPIC] 4 of 7 milestones. The next one is the hard one.` |
 | "You've unlocked a badge!" | `[TITLE] The Unbroken. 90 days without a missed daily. Your previous best was 23.` |
 | — | `[SESSION] 94 seconds. Close this and go do the thing.` |
@@ -78,6 +81,243 @@ Rules:
 - **Display session time as a virtue when it's low.** Radical, on-brand, and a permanent
   check on scope creep — any feature that raises time-in-app must justify itself.
 - No fake urgency, invented scarcity, or guilt.
+
+---
+
+## The life model
+
+### Hierarchy
+
+**Domain → Facet → Epic → Milestone → Habit/Quest**
+
+> **BONDS** → **Family** → *"Repair my relationship with my father"* → *"Call every Sunday
+> for three months"* → *"Sunday 7pm, from home, phone call"*
+
+The epic/milestone split is load-bearing. Without milestones, year-long goals sit inert
+giving no feedback, which is how they die.
+
+### The six domains
+
+**Hard rule: six domains, maximum.** D&D has six; nearly every RPG lands near six. That's
+the limit of what a person can hold in their head and care about. Richness lives at the
+*facet* level, never by adding more bars.
+
+| Domain | Covers | Facets |
+|---|---|---|
+| **VITALITY** | The body | Fitness · Sleep · Nutrition · Medical · Recovery |
+| **MIND** | The inner life | Mental health · Learning · Focus · Emotional regulation |
+| **CRAFT** | Work and means | Career · Skill · Finances · Output |
+| **BONDS** | Everyone else | Family · Partner · Friends · Community |
+| **SPIRIT** | Meaning | Purpose · Faith/practice · Reflection · Gratitude |
+| **VIRTUE** | Character | Charity · Service · Honesty in dealings · Keeping your word |
+| *INTEGRITY* | *Meta* | *Not interviewed. Earned only through honesty with the System.* |
+
+Revised from an earlier draft: **Discipline** was dropped (it's a *means*, not a life area —
+it surfaces as streaks and consistency, not a bar), **Charisma** became **Bonds** (the goal
+is a real relationship with your father, not being charming), **Wealth** folded into
+**Craft**, and **Virtue** was added to cover charity and ethics.
+
+> **Virtue is how you treat other people. Integrity is how you treat the truth.**
+
+### Vices — a separate mechanic, not a quest
+
+**Ships in Phase 2**, so the positive loop is proven first. But Induction *asks* about vices
+in Phase 1 and records them in the Codex — the data exists from day one; only the tracking
+mechanic waits. Otherwise the Codex carries a hole for months and needs a re-interview later.
+
+A quest asks *did I do it?* A vice asks *how long since?* Completions vs elapsed time —
+different data shape, different psychology.
+
+**The trap to avoid: penalising relapse.** Penalty creates shame, shame creates concealment,
+and concealment destroys the honesty system — the most important thing in the product. A
+user who relapsed *and* hid it is strictly worse off than before they started.
+
+**So: relapse costs nothing. Reporting it is rewarded.**
+
+```
+[RECORDED] Streak reset. Previous: 34 days.
+That is 34 days you did not have before.
+Total clean days: 187.
+Next attempt begins now.
+```
+
+1. **Cumulative clean days never reset** — a permanent, monotonically increasing number. The
+   anti-shame engine: most streak systems erase your history, this one banks it.
+2. **Honest relapse logging grants Integrity** — one of the strongest Integrity moves.
+3. **Every vice requires a declared replacement** — "when I want to X, I will Y."
+   Implementation intentions again; removing a behaviour without replacing its function fails.
+
+Vices feed domains normally (quitting smoking → Vitality; managing anger → Bonds).
+
+**Responsibility:** for genuinely dangerous dependencies — alcohol, drugs, self-harm, eating
+disorders — the app must not position itself as treatment. Quiet, non-preachy signposting to
+real help; no gamification of the medical part.
+
+### Four non-obvious rules
+
+1. **Not everything should be scored.** Grief, illness, a brutal work season should be
+   *acknowledged*, not gamified. A declarable **Season of Endurance** pauses decay and stops
+   the System asking for more. The difference between an app that survives your worst year
+   and one you delete during it.
+2. **A balanced character is not the goal.** Radar charts create pressure to round out, but a
+   great life is often deliberately lopsided — someone building a company *should* have low
+   Bonds for two years, by choice. Players **declare a seasonal focus**; the System then stops
+   nagging about consciously deprioritised domains.
+3. **Bonds quests are about your actions, never outcomes.** You can call your father weekly;
+   you cannot make him warm. Scoring relationship *quality* punishes you for other people's
+   behaviour.
+4. **Charity cannot scale with money.** XP proportional to amount lets wealthy players buy
+   Virtue. Reward consistency and proportion, never volume.
+
+---
+
+## Look and feel
+
+### Design brief: where "sense of purpose" actually comes from
+
+Reference points are Kingdom Come: Deliverance, RDR2, GTA V — single-player RPGs that
+generate real purpose about fictional lives. Five portable mechanisms, none of them
+graphical:
+
+1. **You are somebody specific, mid-situation.** Arthur is dying; Henry's village burned.
+   Never a blank slate. → Induction ends with the System stating your actual situation back
+   to you, coldly and with weight. Not "Welcome!"
+2. **Things stick.** Irreversible choices are why they matter. → The append-only event log
+   *is* this mechanic. History can be added to, never edited.
+3. **You start genuinely incompetent.** KCD won't let you fight or read at first; learning
+   to read is a quest. → Starting attributes are honestly low. **Level 1 must feel weak.**
+   A character that starts strong has nowhere to go.
+4. **The interface is the world.** No HUD bolted on top. → There is no "Settings" screen;
+   there is `[SYSTEM CONFIGURATION]`.
+5. **Ritual and pacing.** Camp, cook, sleep-to-save. Ceremony makes meaning. → The daily
+   close-out ritual.
+
+> RDR2 gives you a sense of purpose about a life you're not living.
+> This gives you the same feeling about the one you are.
+
+### The avatar
+
+Anime-styled, **serious** — no chibi, no cute. Selected at Induction, **purely cosmetic**:
+it changes nothing mechanically. Everyone earns on identical terms, characters can be added
+forever without rebalancing, and no one can pick "wrong" for a life they haven't lived yet.
+
+**The governing rule: the avatar may never depict something you haven't earned.** It starts
+*unremarkable* — not ugly, just plain — and becomes impressive only through real achievement.
+That makes it the most honest surface in the app rather than the least: its coolness is a
+direct readout of what you actually did. It works downward too — during decay the figure
+visibly dulls.
+
+It is an **emblem, not a portrait** — the way a D&D character is. This sidesteps "it doesn't
+look like me" entirely.
+
+**Tiers, not layers.** Layered equipment sprites (base body + armor + weapon, pixel-aligned)
+are how indie RPGs die: characters × slots × items explodes into hundreds of assets that must
+all line up. Instead, each character has **~5 full illustrations**, one per tier. Crossing a
+threshold *transforms* the portrait. ~8 characters × 5 tiers ≈ 40 images, each individually
+beautiful, zero alignment problems — and a transformation is a far bigger emotional beat than
+swapping a helmet sprite.
+
+**Tier gating:**
+
+| Tier | Requirement |
+|---|---|
+| I–IV | Overall level thresholds |
+| **V — final form** | Level threshold **plus high Integrity** |
+
+Tier V is the honesty system made permanently visible. A player who fabricated their way to
+Level 50 hits a ceiling they can never pass — and the System never accuses them of anything.
+It states the requirement and nothing more: `[TIER V] Requires Integrity 80. Current: 12.`
+
+**The live effects layer** sits on top of the tier illustration and responds to current state
+in real time. CSS and shaders, not artwork — free, and never needs new assets:
+
+- **Aura colour** = dominant domain (Vitality burns red, Mind cold blue). This is why tiers
+  don't need per-domain variants — expression is handled here, at no art cost.
+- **Glow intensity** = recent consistency. Bright when steady, dim when drifting.
+- **Desaturation** = decay creeping in.
+- **Particles** on the highest tiers only.
+
+Art updates five times across the whole journey; the character looks alive every day.
+
+**Equipment** stays in the panel as icons and stat modifiers. Never worn on the body.
+
+**Lift:** ~40 illustrations in a *consistent* style is the hard part — cross-image consistency
+is where AI generation usually fails. Budget 8–15 h of iteration, or ~$50–150 per character
+commissioned. **Phase 2, not Phase 0.** Deferring is free: an avatar is just an image
+reference per (character, tier), so the tier-swap logic is identical whether the portrait is
+a masterpiece or a grey shape. Phase 0 tests the transformation *feel* with a placeholder
+silhouette — if the tier-up moment doesn't land as a grey shape, expensive art won't save it.
+
+### Palette
+
+- **Base:** near-black with a blue-violet cast (~`#05070D`). Never pure black — reads cheap.
+- **System signature:** cyan-blue (`#4DA6FF` → `#7FD4FF`), used sparingly enough to retain
+  meaning.
+- **Rarity ladder:** grey → green → blue → purple → gold. Twenty years of RPG convention
+  means value is read before the name is. Never rely on colour alone — pair with an icon
+  frame or label.
+- **Decay:** desaturated rust, never alarm-red. The System does not panic.
+- **Integrity:** a pale clean gold, visually distinct from every other stat.
+
+### Typography
+
+Technical/mono face for System notifications (the terminal feel). Weighted, slightly
+condensed headers. Highly readable sans for body. **Tabular figures everywhere numbers
+change**, so counting animations don't jitter.
+
+### Motion — where "stunning" actually comes from
+
+Timing, not artwork. One gesture language used everywhere makes it read as a system rather
+than a website.
+
+- **Panels resolve, they don't appear.** A scan line sweeps down, the panel materializes
+  behind it. ~300ms. Every window in the app.
+- **Numbers never jump.** XP counts up with easing. Highest value-per-effort animation in
+  the product.
+- **Bars overshoot and settle**, with a leading edge of light.
+- **Level-up holds a beat of silence first.** Screen dims, everything stops, *then* the
+  number changes. The pause before the payoff is the payoff.
+- **Easing is sharp and decisive.** Never bouncy — bounce reads as toy.
+
+### Sound and haptics — on by default, one-tap mute
+
+Five sounds: panel open, quest complete, XP tick, level-up, verification. This is what
+separates a game from a website and it is chronically underrated. `navigator.vibrate()` on
+Android for completion and level-up — makes a PWA feel native in a way no visual can.
+
+Default on, because most users never discover audio that ships muted. The mute control is
+persistent and obvious, per the transparency stance.
+
+### Anti-cheap rules
+
+No instant state changes without transition · no default system fonts · no flat colour
+without depth · no bouncy easing · no emoji as icons · no uniform sizing (nothing has
+hierarchy without contrast).
+
+### The honest constraint
+
+RDR2 had hundreds of artists; that asset quality is unreachable and chasing it kills the
+project. But asset budget is not what makes those games feel expensive — **restraint,
+consistency, timing, sound and typography are, and all five are free.** A tightly-timed,
+visually consistent interface built from free icons beats a badly-timed one with custom art.
+Compete on craft.
+
+### Screens
+
+| Screen | Role |
+|---|---|
+| **Status Window** (home) | Avatar at current tier with live aura, level, attributes, title, active quests. The money shot. Real-World Ledger one scroll down: reality always present, game greets you first. |
+| **Today** | Quest list. Thumb-reachable, one tap to complete, under 5 seconds. |
+| **Quest Log** | Epics with milestone trees. |
+| **Codex** | The life journal, styled as System panels. |
+| **Close-out** | The daily ritual. Peak-end moment; last thing seen. |
+| **Verification** | Full-screen, weighty, unhurried. |
+
+### Accessibility
+
+Respect `prefers-reduced-motion` — replace scan-ins and counters with instant states.
+Rarity and status never encoded in colour alone. Contrast checked against the near-black
+base; glow is decoration, never the only signal.
 
 ---
 
@@ -111,10 +351,10 @@ Framed in-world as **Induction** — the System assessing a new subject. Not a s
 
 1. **Orientation** — the System states what it is and what it will not do. The Oath.
 2. **Situation** — where you are right now. Work, health, money, relationships, mind.
-3. **Domain sweep** — each of the **six life domains** probed (Strength, Intellect,
-   Discipline, Wealth, Spirit, Charisma): current state, what you've tried, what stopped
-   you. Adaptive: follows the thread where there's energy or pain. **Integrity is never
-   probed** — see below.
+3. **Domain sweep** — each of the **six life domains** probed (Vitality, Mind, Craft, Bonds,
+   Spirit, Virtue): current state, what you've tried, what stopped you. Adaptive: follows the
+   thread where there's energy or pain. Also captures vices, recorded in the Codex even
+   though vice *tracking* ships in Phase 2. **Integrity is never probed** — see below.
 4. **Aspiration** — what you actually want, on 1-year and 5-year horizons.
 5. **Constraints** — time, money, health, obligations. What can't change.
 6. **Decomposition** — the System proposes epics, milestones and starting dailies, each with
@@ -160,9 +400,10 @@ instantly knows who you are and what you're working on.
 store the Markdown as canonical — every surface stays consistent and re-rendering after a
 schema change is free.
 
-**Sections:** Identity · Current Situation · The Domains (state, goals, obstacles,
-trajectory each) · Active Epics with milestone status · Habits with when/where · Constraints
-and non-negotiables · History and records · Open questions the System is still working out.
+**Sections:** Identity · Current Situation · The Six Domains (state, goals, obstacles,
+trajectory each) · Active Epics with milestone status · Habits with when/where · Vices and
+clean-day records · Constraints and non-negotiables · History and records · Open questions
+the System is still working out.
 
 **Updated on:** milestone completion, level-up, season boundary, micro-interview answer, and
 any manual edit. Versioned, so the player can see how their life document changed over a
@@ -189,7 +430,7 @@ The product's soul. Without it this is a fantasy generator.
 ```
 [VERIFICATION]
 You are claiming: "Shipped the beta"
-This grants: Level 12, +3 Wealth, [Founder's Signet]
+This grants: Level 12, +3 Craft, [Founder's Signet]
 
 The System cannot check this. Only you can.
 What is the evidence?  ____________________
@@ -205,8 +446,8 @@ rather than a rule to obey.
 
 **Integrity** is a real attribute. It rises from retracting claims, passing self-audits, and
 choosing NOT YET. It is the only stat that cannot be raised by completing quests — and it
-gates the highest-tier titles. Cheating to Level 50 with 2 Integrity produces a character
-sheet that is visibly, permanently hollow.
+gates the highest-tier titles and Tier V of the avatar. Cheating to Level 50 with 2 Integrity
+produces a character sheet that is visibly, permanently hollow.
 
 **Integrity starts at a neutral baseline and only ever rises. It never falls.** This follows
 directly from the tone rule *never accuse*: the System cannot detect a lie, so it must never
@@ -218,7 +459,7 @@ claims and asks the player to confirm or retract. Retracting *raises* Integrity 
 nothing — the honest ledger is worth more than the points.
 
 **The Reality Check.** When metrics drift — logging a fitness daily for 40 days while the
-Strength trajectory is flat — the System says so plainly and asks what's actually happening.
+Vitality trajectory is flat — the System says so plainly and asks what's actually happening.
 
 ---
 
@@ -263,7 +504,8 @@ Applied:
 shadcn/ui (heavily reskinned) · Framer Motion · Claude API · Vercel · Resend · Sentry ·
 PostHog · Playwright + Vitest.
 
-**Two decisions that matter more than the rest:**
+**Two decisions that matter more than the rest** — and the only two that are genuinely hard
+to change later:
 
 1. **Event-source the progression.** Never store `user.xp = 4500`. Append-only event log
    (`quest_completed`, `loot_rolled`, `claim_retracted`, `decay_applied`); derive everything.
@@ -271,6 +513,9 @@ PostHog · Playwright + Vitest.
    the audit trail is what makes the honesty system provable rather than decorative.
 2. **Game rules are data, not code.** XP curves, item stats, loot tables, quest templates,
    achievements live in versioned config rows. Balance tweaks must not require a deploy.
+
+Everything else is designed to be changed cheaply: avatars are image references, rules are
+rows, and Phase 0 is disposable by intent.
 
 **Security:**
 
@@ -297,9 +542,9 @@ Each phase ends with something that works. Hours are the author's time, not Clau
 
 | Phase | Deliverable | Effort |
 |---|---|---|
-| **0 — Feel test** | One page, fake data, XP bar, level-up animation, System voice. No login, no DB, no AI. Sole question: does the loop feel good and does the tone land? Disposable on purpose. | **4–6 h** |
+| **0 — Feel test** | Status Window with fake data, placeholder silhouette avatar + a fake tier-up transformation, panel scan-in, counting XP, bar overshoot, level-up hold, sound + haptics, dummy Verification Screen. No login, no DB, no AI, no real art. Sole question: does it feel good and does the tone land? Disposable on purpose. | **4–6 h** |
 | **1 — MVP** | Auth, DB, ~10-min Induction, seven attributes, four quest types, XP, levels, streaks, decay, Verification Screen, Integrity, Codex + Markdown export, daily close-out ritual. Installable on phone. Daily-usable. | **35–55 h** |
-| **2 — Depth** | Gold, loot, items, equipment, shop, achievements, titles, seasons, seasonal audit, Reality Check, in-app Codex journal, private token URL, sound and animation polish, admin content tooling. | **35–55 h** |
+| **2 — Depth** | **Vices** (clean streaks, cumulative clean days, no-penalty relapse logging, declared replacements), character roster + ~40 tier illustrations, live aura layer, gold, loot, items, equipment, shop, achievements, titles, seasons + seasonal focus + Season of Endurance, seasonal audit, Reality Check, in-app Codex journal, private token URL, sound and animation polish, admin content tooling. | **50–78 h** |
 | **3 — Safe for others** | Induction tuned against real drop-off data, privacy controls, transparency page, email, export/delete, error tracking, analytics, abuse handling, LLM cost controls. | **25–40 h** |
 | **4 — Optional** | Google Drive sync, Health/Strava/GitHub verification, friends and parties, Phaser map scene. | open-ended |
 
@@ -338,6 +583,17 @@ Each phase ends with something that works. Hours are the author's time, not Clau
 
 **No separate "backend tool."** Server code lives in the same Next.js project and runs on
 Vercel. The only backend *choice* is the database, and it's Supabase.
+
+### Build order
+
+Code first, accounts only when something needs them, domain last.
+
+1. **Phase 0 built** — zero accounts required.
+2. **Vercel signup** (~10 min) — the only thing needed to see and feel it on a phone.
+3. **Live with it a week** — the real gate.
+4. **Supabase** (~20 min) — only once things must persist.
+5. **Anthropic Console** — when Induction is built. Set the spend limit *first*.
+6. **Domain** — whenever. Purely cosmetic; `*.vercel.app` works fine for months.
 
 ### Build loop (no local install required)
 
@@ -388,9 +644,19 @@ No app store, engine, or license fees, ever.
 
 ---
 
-## Open risks
+## Open items
 
-Two things are genuinely unresolved — not blockers, but where this could go wrong:
+None block Phase 0. Each is decidable when its phase arrives:
+
+| Item | Needed by |
+|---|---|
+| XP curve and level thresholds (actual numbers) | Phase 1 |
+| Launch character roster size | Phase 2 |
+| Tier thresholds, and the Integrity bar for Tier V | Phase 2 |
+| Starting vice list and facet taxonomy refinement | Phase 2 |
+| Whether the Codex can be shared with chosen people, or stays strictly private | Phase 2/3 |
+
+## Open risks
 
 1. **The Verification Screen is untested psychology.** The theory is that making honesty the
    low-friction path beats policing. It might instead read as nagging. Phase 0 is where to
@@ -398,6 +664,8 @@ Two things are genuinely unresolved — not blockers, but where this could go wr
 2. **Ten minutes of interview producing a character that feels *right* is the hardest single
    thing in Phase 1.** If the derived stats feel arbitrary, the whole covenant reads as
    theater. Expect to iterate hardest here.
+3. **"Level 1 must feel weak" will be hard to hold.** Every instinct pushes toward a generous
+   first session, and that's exactly what drains the next fifty of meaning.
 
 ---
 
