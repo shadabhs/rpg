@@ -28,7 +28,7 @@ is the product. Every design decision is judged against it.
 | **Game engine** | **None.** Plain web app. | Lists, forms, numbers, animation — no physics or realtime rendering. An engine breaks text input, accessibility, links, SEO for zero benefit. Phaser optional later for one map scene. |
 | **Failure model** | Slow decay on absence only | Nothing for 3 days. Gentle rust after 7. Capped ~15%, never lose a level permanently. One-tap "I'm back." |
 | **Character** | Six life domains + Integrity | **Vitality** (body), **Mind** (inner life), **Craft** (work/means), **Bonds** (relationships), **Spirit** (meaning), **Virtue** (character) — plus **Integrity**, earned only through honesty with the System. See "The life model". |
-| **Content types** | All four, plus vices | Daily habits · epics with milestones · work/project tasks · **Measures** (quantities with ciphers and per-measure privacy) · **vices** (abstinence, separate mechanic). Last two ship Phase 2. |
+| **Content types** | Four quest types, plus Measures and vices | Daily habits · epics with milestones · work/project tasks · **Measures** (quantities with ciphers and per-measure privacy) · **vices** (abstinence, separate mechanic). Last two ship Phase 2. |
 | **Social** | Solo now, architected for later | Private today; `visibility` flags and user-scoped schema from day one. |
 | **Aesthetic** | Dark fantasy "System" (Solo Leveling) | Blue holographic panels, terminal notifications — `[QUEST COMPLETE]`, `[LEVEL UP]`. A system that plainly states what it is doing. Cheapest path to looking genuinely great (typography + glow, not illustration). |
 | **Avatar** | Anime-style, serious. Selectable, **purely cosmetic**. 5 tiers per character. | Starts plain and becomes impressive only through earned progress — so it doesn't lie, it *is* the covenant made visible. Cosmetic-only because a class perk is power granted for free, and because nobody can know at Induction which life they'll actually live. |
@@ -271,10 +271,14 @@ brokerage access, turning a self-reported number into a verified one.
 
 #### Where it lives
 
-**Not in Settings** — settings is where features go to die. A dedicated in-world
-**`[CALIBRATION]`** screen, reached from the Codex and from any domain, holds measures,
-units, ciphers, targets and privacy. Settings keeps only mechanical preferences: sound,
-notifications, theme, account.
+**Not buried in preferences** — that is where features go to die. Measures get their own
+in-world **`[CALIBRATION]`** screen, reached from the Codex and from any domain, holding
+units, ciphers, targets and privacy.
+
+**`[SYSTEM CONFIGURATION]`** — the app's preferences screen, named per the diegetic-UI rule
+(there is no screen labelled "Settings" anywhere in this product) — keeps only mechanical
+concerns: sound and haptics, notification cadence, account. Nothing about your life lives
+there.
 
 **Induction proposes it.** The interview asks whether to track finances, in what units,
 and what should stay hidden — then builds it and shows the player what it made. Discovery
@@ -442,6 +446,8 @@ Compete on craft.
 | **Codex** | The life journal, styled as System panels. |
 | **Close-out** | The daily ritual. Peak-end moment; last thing seen. |
 | **Verification** | Full-screen, weighty, unhurried. |
+| **`[CALIBRATION]`** | Measures — units, ciphers, targets, per-measure privacy. Reached from the Codex and from any domain. Phase 2. |
+| **`[SYSTEM CONFIGURATION]`** | Mechanical preferences only: sound and haptics, notification cadence, account. Never labelled "Settings". |
 
 ### Accessibility
 
