@@ -27,7 +27,7 @@ is the product. Every design decision is judged against it.
 | **Game engine** | **None.** Plain web app. | Lists, forms, numbers, animation — no physics or realtime rendering. An engine breaks text input, accessibility, links, SEO for zero benefit. Phaser optional later for one map scene. |
 | **Failure model** | Slow decay on absence only | Nothing for 3 days. Gentle rust after 7. Capped ~15%, never lose a level permanently. One-tap "I'm back." |
 | **Character** | Six life domains + Integrity | **Vitality** (body), **Mind** (inner life), **Craft** (work/means), **Bonds** (relationships), **Spirit** (meaning), **Virtue** (character) — plus **Integrity**, earned only through honesty with the System. See "The life model". |
-| **Content types** | All four, plus vices | Daily habits · epics with milestones · work/project tasks · measured numbers with targets · **vices** (abstinence, separate mechanic, Phase 2). |
+| **Content types** | All four, plus vices | Daily habits · epics with milestones · work/project tasks · **Measures** (quantities with ciphers and per-measure privacy) · **vices** (abstinence, separate mechanic). Last two ship Phase 2. |
 | **Social** | Solo now, architected for later | Private today; `visibility` flags and user-scoped schema from day one. |
 | **Aesthetic** | Dark fantasy "System" (Solo Leveling) | Blue holographic panels, terminal notifications — `[QUEST COMPLETE]`, `[LEVEL UP]`. A system that plainly states what it is doing. Cheapest path to looking genuinely great (typography + glow, not illustration). |
 | **Avatar** | Anime-style, serious. Selectable, **purely cosmetic**. 5 tiers per character. | Starts plain and becomes impressive only through earned progress — so it doesn't lie, it *is* the covenant made visible. Cosmetic-only because a class perk is power granted for free, and because nobody can know at Induction which life they'll actually live. |
@@ -152,6 +152,103 @@ Vices feed domains normally (quitting smoking → Vitality; managing anger → B
 **Responsibility:** for genuinely dangerous dependencies — alcohol, drugs, self-harm, eating
 disorders — the app must not position itself as treatment. Quiet, non-preachy signposting to
 real help; no gamification of the medical part.
+
+### Measures — encoding real quantities (Phase 2)
+
+Some facets are governed by a *quantity*, not a checkbox: bank balance, bodyweight,
+books, revenue. These are **Measures**, and they follow one rule above all others:
+
+> **Encode the delta. Display the stock. Only the delta grants anything.**
+
+A stock is a reading, never an achievement. If ₹10 lakh became 10,000 coins that
+bought equipment granting stats, someone who *inherited* money would be more powerful
+than someone who worked — pay-to-win where the payment happened outside the app. It
+also breaks "Level 1 must feel weak", since a wealthy player would open the app rich.
+
+**Contributions earn XP. Valuations do not.** If the market rises 8% you did nothing.
+Awarding XP for that reinvents passive gains, which the covenant forbids. So every
+financial Measure carries two numbers: its **value** (a reading, grants nothing) and
+its **contribution** (what you actually moved, which earns Craft XP).
+
+#### Anatomy of a Measure
+
+| Property | Example |
+|---|---|
+| Real unit | ₹ · kg · hours · books |
+| Game unit + **cipher** | 1 Sovereign = ₹100 (ratio chosen by the player) |
+| Scale | tiered (vaults) · linear · logarithmic |
+| Privacy | **per measure**: visible · masked · PIN/biometric-gated |
+| XP source | **change only, never level** |
+| Staleness | `Last calibrated 47 days ago` |
+
+**The cipher is a privacy feature, not flavour.** A screen reading `₹10,00,000` is real
+exposure to anyone glancing at the phone; `10,000 Sovereigns` is precise to the player
+and meaningless to everyone else. Game units display by default; tap-and-hold reveals
+the real figure, optionally behind device PIN or biometric.
+
+**Staleness is stated plainly.** A Measure nobody has updated is a lie by omission. The
+System shows when it was last calibrated rather than presenting a confident stale number.
+
+#### Display: proximity, not totals
+
+Linear encoding breaks at the edges — ₹100 = 1 coin means a crore shows as 100,000 coins
+next to someone's 200. Use the existing invariant instead: **always show proximity**.
+
+```
+[TREASURY]  SILVER VAULT
+            ████████░░  68% to GOLD VAULT
+            Runway: 7.2 months
+```
+
+Tiered vaults (Copper → Silver → Gold → Platinum → Mythril), each a multiple of the last.
+A student going ₹20k → ₹50k crosses a tier exactly as a ₹20L → ₹50L move does.
+
+#### The Craft finance measures
+
+Tracked **separately**, never as one composite:
+
+| Measure | Earns XP on |
+|---|---|
+| **Liquid** — cash and bank | net contribution |
+| **Assets** — property, investments | contribution only, never appreciation |
+| **Liabilities** — debt | principal repaid |
+| **Monthly income** | verified increase, as a milestone — not monthly salary arriving |
+
+Receiving a salary is not an achievement; the work that earned it is already a Craft quest.
+
+**Derived readouts** are computed only where their inputs exist, and are never required:
+
+```
+NET WORTH     assets + liquid − liabilities
+RUNWAY        liquid ÷ monthly burn
+SAVINGS RATE  (income − burn) ÷ income
+```
+
+Runway is the preferred headline once burn is tracked — it normalises across every income
+level and moves when spending is cut, not only when earnings rise.
+
+> **Privacy inheritance:** a derived readout takes the **strictest** privacy of its inputs
+> and cannot be loosened. Otherwise an ungated Runway leaks a PIN-gated Liquid to anyone
+> who knows the burn rate. The same rule binds notifications and the Codex export — a
+> masked Measure never appears in plaintext in either.
+
+Wealth is where lying is most tempting, so large jumps in a Measure trigger the same
+**Verification Screen** as a milestone. Phase 4 optionally connects read-only bank or
+brokerage access, turning a self-reported number into a verified one.
+
+#### Where it lives
+
+**Not in Settings** — settings is where features go to die. A dedicated in-world
+**`[CALIBRATION]`** screen, reached from the Codex and from any domain, holds measures,
+units, ciphers, targets and privacy. Settings keeps only mechanical preferences: sound,
+notifications, theme, account.
+
+**Induction proposes it.** The interview asks whether to track finances, in what units,
+and what should stay hidden — then builds it and shows the player what it made. Discovery
+by configuration is how personalisation features go unused.
+
+**Phasing:** Induction captures Measures in Phase 1 so the data exists from day one; the
+Calibration UI, ciphers and vault tiers ship in Phase 2 — same pattern as vices.
 
 ### Four non-obvious rules
 
@@ -544,9 +641,9 @@ Each phase ends with something that works. Hours are the author's time, not Clau
 |---|---|---|
 | **0 — Feel test** | Status Window with fake data, placeholder silhouette avatar + a fake tier-up transformation, panel scan-in, counting XP, bar overshoot, level-up hold, sound + haptics, dummy Verification Screen. No login, no DB, no AI, no real art. Sole question: does it feel good and does the tone land? Disposable on purpose. | **4–6 h** |
 | **1 — MVP** | Auth, DB, ~10-min Induction, seven attributes, four quest types, XP, levels, streaks, decay, Verification Screen, Integrity, Codex + Markdown export, daily close-out ritual. Installable on phone. Daily-usable. | **35–55 h** |
-| **2 — Depth** | **Vices** (clean streaks, cumulative clean days, no-penalty relapse logging, declared replacements), character roster + ~40 tier illustrations, live aura layer, gold, loot, items, equipment, shop, achievements, titles, seasons + seasonal focus + Season of Endurance, seasonal audit, Reality Check, in-app Codex journal, private token URL, sound and animation polish, admin content tooling. | **50–78 h** |
+| **2 — Depth** | **Measures + `[CALIBRATION]`** (ciphers, per-measure privacy, vault tiers, derived readouts), **Vices** (clean streaks, cumulative clean days, no-penalty relapse logging, declared replacements), character roster + ~40 tier illustrations, live aura layer, gold, loot, items, equipment, shop, achievements, titles, seasons + seasonal focus + Season of Endurance, seasonal audit, Reality Check, in-app Codex journal, private token URL, sound and animation polish, admin content tooling. | **62–92 h** |
 | **3 — Safe for others** | Induction tuned against real drop-off data, privacy controls, transparency page, email, export/delete, error tracking, analytics, abuse handling, LLM cost controls. | **25–40 h** |
-| **4 — Optional** | Google Drive sync, Health/Strava/GitHub verification, friends and parties, Phaser map scene. | open-ended |
+| **4 — Optional** | Google Drive sync, Health/Strava/GitHub verification, read-only bank/brokerage connection for verified Measures, friends and parties, Phaser map scene. | open-ended |
 
 **Phase 0 + 1 ≈ 40–60 h** is the number that matters — that's "I use this every day."
 
@@ -654,6 +751,7 @@ None block Phase 0. Each is decidable when its phase arrives:
 | Launch character roster size | Phase 2 |
 | Tier thresholds, and the Integrity bar for Tier V | Phase 2 |
 | Starting vice list and facet taxonomy refinement | Phase 2 |
+| Vault tier multiplier, and default Measure set per domain | Phase 2 |
 | Whether the Codex can be shared with chosen people, or stays strictly private | Phase 2/3 |
 
 ## Open risks

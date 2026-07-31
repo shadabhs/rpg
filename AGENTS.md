@@ -80,6 +80,11 @@ Hierarchy: **Domain → Facet → Epic → Milestone → Habit/Quest**
   This will be tempting to soften. Don't.
 - **Relapse costs nothing; reporting it is rewarded.** Penalty → shame →
   concealment → the honesty system dies.
+- **Measures: encode the delta, display the stock.** A bank balance is a reading,
+  never an achievement — otherwise inherited money becomes power. Contributions
+  earn XP; valuations never do (market movement is not an action). Privacy is
+  per-measure, and a derived readout inherits the strictest privacy of its
+  inputs, or an ungated Runway leaks a gated Liquid.
 - **Bonds quests are about your actions, never outcomes** you don't control.
 - **The avatar may never depict something you haven't earned.**
 
