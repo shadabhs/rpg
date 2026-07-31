@@ -1,0 +1,244 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------
+   THE SYSTEM — design tokens
+   Palette per DESIGN.md: near-black with a blue-violet cast, cyan
+   signature used sparingly, rarity ladder, rust decay, pale gold
+   Integrity.
+   --------------------------------------------------------------- */
+
+@theme {
+  --color-void: #05070d;
+  --color-void-2: #080b14;
+  --color-panel: #0b101c;
+  --color-edge: #1b2740;
+  --color-edge-hot: #2d456b;
+
+  --color-sys: #4da6ff;
+  --color-sys-bright: #7fd4ff;
+  --color-sys-dim: #2b6ca8;
+
+  --color-ink: #c8d4e6;
+  --color-ink-dim: #6b7a92;
+  --color-ink-faint: #3d4a60;
+
+  --color-vitality: #ff5f4d;
+  --color-mind: #4da6ff;
+  --color-craft: #ffb13d;
+  --color-bonds: #35d6a4;
+  --color-spirit: #a78bfa;
+  --color-virtue: #ffd98a;
+  --color-integrity: #f5e6b8;
+
+  --color-rust: #8c5a4a;
+
+  --color-rare-common: #8a8f98;
+  --color-rare-uncommon: #4ade80;
+  --color-rare-rare: #4da6ff;
+  --color-rare-epic: #a78bfa;
+  --color-rare-legendary: #ffc94d;
+
+  --font-display: var(--font-rajdhani), system-ui, sans-serif;
+  --font-sys: var(--font-jetbrains), ui-monospace, monospace;
+  --font-body: var(--font-inter), system-ui, sans-serif;
+
+  --ease-sys: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-sharp: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-void);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  /* No overscroll bounce — this should feel like an instrument, not a page. */
+  overscroll-behavior: none;
+}
+
+body {
+  /* Faint vignette + grid so the void has depth rather than being flat black. */
+  background-image:
+    radial-gradient(
+      ellipse 120% 80% at 50% -10%,
+      rgba(77, 166, 255, 0.09),
+      transparent 60%
+    ),
+    linear-gradient(rgba(27, 39, 64, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(27, 39, 64, 0.16) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    44px 44px,
+    44px 44px;
+  background-attachment: fixed;
+}
+
+/* Numbers must never jitter while counting. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+::selection {
+  background: rgba(77, 166, 255, 0.28);
+}
+
+/* ---------------------------------------------------------------
+   MOTION
+   One gesture language, used everywhere. Sharp and decisive easing —
+   never bouncy, bounce reads as toy.
+   --------------------------------------------------------------- */
+
+/* Panels resolve, they don't appear: a scan line sweeps down and the
+   panel materializes behind it. */
+@keyframes scan-sweep {
+  0% {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    transform: scaleY(1);
+    opacity: 0;
+  }
+}
+
+@keyframes panel-resolve {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+    filter: brightness(2.2);
+  }
+  60% {
+    filter: brightness(1.3);
+  }
+  100% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    filter: brightness(1);
+  }
+}
+
+@keyframes edge-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes aura-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.045);
+  }
+}
+
+@keyframes rise-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes flare {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  22% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+}
+
+@keyframes drift-up {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(1);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-46px) scale(0.7);
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-2px, 1px);
+  }
+  40% {
+    transform: translate(2px, -1px);
+  }
+  60% {
+    transform: translate(-1px, -1px);
+  }
+  80% {
+    transform: translate(1px, 1px);
+  }
+}
+
+.animate-panel {
+  animation: panel-resolve 340ms var(--ease-sys) both;
+}
+.animate-scan {
+  animation: scan-sweep 340ms var(--ease-sharp) both;
+  transform-origin: top;
+}
+.animate-rise {
+  animation: rise-fade 420ms var(--ease-sys) both;
+}
+.animate-flare {
+  animation: flare 900ms var(--ease-sharp) both;
+}
+.animate-drift {
+  animation: drift-up 1100ms var(--ease-sys) both;
+}
+.animate-shake {
+  animation: shake 260ms var(--ease-sharp) both;
+}
+.animate-aura {
+  animation: aura-breathe 4.5s ease-in-out infinite;
+}
+.animate-edge {
+  animation: edge-pulse 2.4s ease-in-out infinite;
+}
+
+/* Accessibility: replace scan-ins and counters with instant states.
+   Glow is decoration, never the only signal. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
