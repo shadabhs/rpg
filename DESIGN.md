@@ -64,7 +64,7 @@ facts about reality.
 | "🎉 30 day streak! You're on fire!" | `[RECORD] Trained 30 consecutive days. Last year's best: 11.` |
 | "Welcome back! We missed you!" | `[STATUS] 9 days absent. Strength has rusted 6%. Nothing else was lost.` |
 | "Keep going, you've got this!" | `[EPIC] 4 of 7 milestones. The next one is the hard one.` |
-| "You've unlocked a badge!" | `[TITLE] The Unbroken. 90 days without a missed daily. 41 people have earned this.` |
+| "You've unlocked a badge!" | `[TITLE] The Unbroken. 90 days without a missed daily. Your previous best was 23.` |
 | — | `[SESSION] 94 seconds. Close this and go do the thing.` |
 
 Rules:
@@ -111,14 +111,20 @@ Framed in-world as **Induction** — the System assessing a new subject. Not a s
 
 1. **Orientation** — the System states what it is and what it will not do. The Oath.
 2. **Situation** — where you are right now. Work, health, money, relationships, mind.
-3. **Domain sweep** — each attribute probed: current state, what you've tried, what stopped
-   you. Adaptive: follows the thread where there's energy or pain.
+3. **Domain sweep** — each of the **six life domains** probed (Strength, Intellect,
+   Discipline, Wealth, Spirit, Charisma): current state, what you've tried, what stopped
+   you. Adaptive: follows the thread where there's energy or pain. **Integrity is never
+   probed** — see below.
 4. **Aspiration** — what you actually want, on 1-year and 5-year horizons.
 5. **Constraints** — time, money, health, obligations. What can't change.
 6. **Decomposition** — the System proposes epics, milestones and starting dailies, each with
    a **when and where**. The player edits and confirms. Nothing is imposed.
-7. **Manifestation** — starting attributes derived from the interview, not chosen. Cosmetics
-   *are* chosen. The System states plainly why each stat landed where it did.
+7. **Manifestation** — the six domain attributes derived from the interview, not chosen.
+   Cosmetics *are* chosen. The System states plainly why each stat landed where it did.
+
+**Seven attributes, six of them interviewed.** Integrity is the exception: it cannot be
+self-reported, because a stat measuring honesty that you set yourself is worthless. It
+starts at a neutral baseline for everyone and moves only through demonstrated behaviour.
 
 **Depth: ~10 minutes. One length, for everyone.** Deliberately not 5 and not 30.
 
@@ -202,6 +208,11 @@ choosing NOT YET. It is the only stat that cannot be raised by completing quests
 gates the highest-tier titles. Cheating to Level 50 with 2 Integrity produces a character
 sheet that is visibly, permanently hollow.
 
+**Integrity starts at a neutral baseline and only ever rises. It never falls.** This follows
+directly from the tone rule *never accuse*: the System cannot detect a lie, so it must never
+punish a suspected one. It can only reward honesty it has actually witnessed. Low Integrity
+is therefore an absence of evidence, never an accusation — and the System says so when asked.
+
 **Seasonal self-audit.** At each season boundary the System presents the season's biggest
 claims and asks the player to confirm or retract. Retracting *raises* Integrity and refunds
 nothing — the honest ledger is worth more than the points.
@@ -272,7 +283,8 @@ PostHog · Playwright + Vitest.
   back into a prompt.
 - Rate limiting on writes; secrets in platform vault; CI secret scanning; Dependabot;
   `/security-review` on every PR.
-- Export and hard delete working from Phase 3.
+- Data export lands in Phase 1 (the Codex Markdown export doubles as it). Hard delete —
+  full account and data erasure — lands in Phase 3, before anyone but the author signs up.
 
 **Assets (free):** game-icons.net (~4,000 RPG icons, CC BY) · Kenney.nl (CC0) · Habitica for
 mechanics study only — copyleft, don't copy code.
