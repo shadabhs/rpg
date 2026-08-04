@@ -7,89 +7,168 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev      # dev server
-npm run build    # production build (also runs the TS type check)
+npm run dev      # dev server (Turbopack)
+npm run build    # production build — forced to webpack, see note below
 npm run start    # serve the production build
 npm run lint      # eslint (eslint-config-next: core-web-vitals + typescript)
 npx tsc --noEmit  # type check only, no separate script defined
+npm test          # vitest — currently covers lib/engine/ only
 ```
 
-There is no test suite in the repo. Verify UI changes by building, starting the
-production server, and driving it with a real browser (Playwright or manual) —
-don't trust `next dev`'s live-reload preview alone, and don't trust a plain
-`npm run build` success as proof the UI works; it only proves it compiles.
+There is no UI test suite in the repo. Verify UI changes by building, starting
+the production server, and driving it with a real browser (Playwright or
+manual) — don't trust `next dev`'s live-reload preview alone, and don't trust
+a plain `npm run build` success as proof the UI works; it only proves it
+compiles. Note that anything touching Supabase (auth, quest completion, the
+event log) cannot be exercised end-to-end from a sandboxed environment without
+outbound network access to `*.supabase.co` — verify those paths against a real
+deployment.
 
-No environment variables are required. No database, auth, or API keys exist yet.
+**Build is forced to webpack** (`next build --webpack` in package.json).
+Turbopack has documented `NEXT_PUBLIC_*` env-var inlining regressions on
+Vercel's build pipeline (Next.js 15.3+, notably under the standalone-output
+packaging path); `next dev` is unaffected and stays on Turbopack.
+
+Requires `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (see
+`.env.local.example`). No service role key needed anywhere in this repo — every
+table is RLS-scoped to `auth.uid()`, so the anon key plus a user's session is
+sufficient. See `db/README.md` for applying the schema/policies to a fresh
+Supabase project.
 
 ## Architecture
 
-**This is Phase 0 of a multi-phase build** — see `DESIGN.md` (canonical product
-spec) and `AGENTS.md` (the short version: covenant, tone, AI boundary, life
-model, design invariants). Phase 0 is fake data only, disposable by intent, and
-most of it gets replaced in Phase 1. `lib/data.ts` is fake and must not be
-imported once real data exists.
+**Phase 1 in progress** — see `DESIGN.md` (canonical product spec) and
+`AGENTS.md` (the short version: covenant, tone, AI boundary, life model,
+design invariants). Phase 0's fake data (`lib/data.ts`) is gone; auth, the
+database, and real progression are wired. Not yet built: the AI Induction
+interview (needs a separate Anthropic Console account — deliberately deferred,
+see the AI boundary in `AGENTS.md`), vices, Measures, seasons — all Phase 2+
+per `DESIGN.md`.
 
-The whole app is currently one client-rendered screen:
+### The progression engine (`lib/engine/`) — read this before touching XP/level/Integrity anywhere
 
-- **`app/page.tsx`** — the Status Window. Owns all state (quests, domains,
-  level, XP, tier, Integrity, toasts) and orchestrates which overlay is
-  showing. Everything else is presentational, driven by props from here.
-- **`app/layout.tsx`** — loads three fonts via `next/font` and maps them to the
-  CSS variables consumed by `globals.css`: Rajdhani → `--font-display`
-  (headers), JetBrains Mono → `--font-sys` (System/terminal voice), Inter →
-  `--font-body`.
-- **`app/globals.css`** — the entire design system lives here as a Tailwind v4
-  `@theme` block: the palette (`--color-void`, `--color-sys`, one colour per
-  life domain like `--color-vitality`, the rarity ladder, `--color-integrity`),
-  the two easing curves, and named `.animate-*` classes tied to specific
-  `@keyframes` (`panel-resolve`, `scan-sweep`, `aura-breathe`, `flare`,
-  `drift-up`, `shake`, `edge-pulse`). New UI should reuse these tokens and
-  animation classes rather than introducing new colours or one-off transitions.
-  `prefers-reduced-motion` is handled globally here by collapsing all
-  animation/transition durations to ~0.
+This is the one part of the app the AI boundary applies to literally: nothing
+here may depend on network I/O, randomness, or an LLM, and `reducer.test.ts`
+statically greps `reducer.ts`/`rules.ts` for exactly that on every test run.
+
+- **`events.ts`** — `SystemEvent`, a closed union of four shapes
+  (`quest_completed`, `claim_verified`, `claim_declined`, `claim_retracted`).
+  This is the append-only log — never store a computed total, store what
+  happened.
+- **`reducer.ts`** — `reduce(events, now)` is a pure function that replays the
+  log into a `CharacterState` (level, XP, Integrity, domains, tier). The
+  **same function runs on the client and the server**: the client appends an
+  optimistic event and re-runs `reduce()` for instant, exactly-correct UI
+  feedback, while a Server Action persists the real event. This is not a
+  duplicated implementation — it's the same module imported in both places, so
+  there's no way for the two to drift.
+- **`rules.ts`** — every tunable number (`XP_BY_DIFFICULTY`, the weekly XP
+  cap, the level curve, decay rates, tier thresholds, `TIER_NAMES`). Isolated
+  here on purpose so a future move to DB-backed, versioned config rows (Phase
+  2, "balance tweaks must not require a deploy") is a relocation, not a
+  rewrite.
+- **`domains.ts`** — `DomainKey`, `DOMAIN_KEYS`, and `DOMAIN_DISPLAY` (label/
+  colour/description). Deliberately independent of the old `lib/data.ts` —
+  the engine never depended on Phase 0's fake data, and now nothing does.
+
+### Data flow: Server Component → Client Component → Server Actions
+
+- **`app/page.tsx`** — async Server Component. Gets the authenticated user,
+  upserts their `profiles` row (first-visit bootstrap — no Induction yet, so
+  everyone starts at Level 1 / all domains at 0, which is correct per "Level 1
+  must feel weak"), fetches `quests` and `event_log`, maps rows to
+  `SystemEvent[]` via `db/mappers.ts`, and renders `StatusWindowClient`.
+- **`components/StatusWindowClient.tsx`** — owns all interactive state.
+  Mirrors Phase 0's animation choreography (optimistic update → toast → check
+  for a level/tier crossing → overlay) but every number now comes from
+  `reduce()` over real events, not ad-hoc arithmetic. On a Server Action
+  failure, it reverts the optimistic event by id and surfaces
+  `[ REJECTED ] <reason>` via the same toast mechanism used for XP gains.
+- **`app/actions.ts`** — the entire write surface for progression
+  (`completeQuest`, `verifyClaim`, `declineClaim`, `createQuest`, `signOut`).
+  Every action re-derives the acting user from the session server-side; never
+  trusts a client-supplied `user_id`. `completeQuest` explicitly refuses
+  `weighty` quests — those must go through `verifyClaim`/`declineClaim`.
+- **`middleware.ts`** — refreshes the Supabase session on every request and
+  gates everything except `/login` and `/auth/*`. Deliberately added in a
+  later commit than the login page itself — flipping the gate on before
+  `/login` was proven to reach Supabase would have broken the live site behind
+  a wall nobody could get through.
+
+### Database (`db/`)
+
+- **`schema.ts`** — Drizzle schema, used for migration generation only;
+  nothing at runtime queries through Drizzle. All runtime reads/writes go
+  through `@supabase/supabase-js`, which returns raw **snake_case** column
+  names — `db/mappers.ts`'s `EventRow`/`QuestRow` types reflect that
+  deliberately, not the camelCase Drizzle would produce.
+- **`policies.sql`** — RLS. `event_log` gets `INSERT`/`SELECT` policies and
+  **no `UPDATE`/`DELETE` policy for any role**, including the row's own
+  owner — that omission is what makes the honesty system's audit trail
+  provable. `quests` allows delete only while `status = 'active'`.
+- **`mappers.ts`** — `rowToEvent()` bridges a raw `event_log` row to the
+  `SystemEvent` union; throws on an unrecognized `type` rather than silently
+  dropping it.
+- **`README.md`** — how to apply the schema/policies to a fresh project, and
+  how the policies were behaviourally verified (real local Postgres, stub
+  `auth.uid()`, two simulated users) before ever reaching production.
+
+### Auth (`lib/supabase/`, `app/login/`, `app/auth/callback/`)
+
+Magic link only — no password, no OAuth app to register. `lib/supabase/
+client.ts` / `server.ts` are the standard `@supabase/ssr` browser/server split.
+`app/login/page.tsx` is styled in the System's voice, not a generic form.
+
+### `app/layout.tsx` / `app/globals.css`
+
+Unchanged from Phase 0. Three fonts via `next/font` mapped to
+`--font-display` / `--font-sys` / `--font-body`; the entire design system
+(palette, easing, named `.animate-*` classes tied to specific `@keyframes`)
+lives in `globals.css` as a Tailwind v4 `@theme` block. New UI should reuse
+these tokens rather than introducing new colours or one-off transitions.
+`prefers-reduced-motion` is handled globally there.
 
 ### Components (`components/`)
 
-- **`Panel.tsx`** — the System-window shell used for every panel on screen:
-  handles the delayed scan-in reveal (`animate-panel` + `animate-scan`), the
-  bracket-corner frame, and plays the `"panel"` sound cue once on reveal. Any
-  new panel-like UI should be built as children of this, not a bespoke `<div>`.
+- **`Panel.tsx`** — the System-window shell used for every panel: the
+  delayed scan-in reveal, the bracket-corner frame, the `"panel"` sound cue
+  on reveal. Build new panel-like UI as children of this, not a bespoke `<div>`.
 - **`CountUp.tsx`** — animated tabular-number counter; reads
   `useReducedMotion()` to skip animation and render the raw value instead.
-- **`StatBar.tsx`** — a single domain bar (fill + overshoot + leading edge of
-  light).
-- **`Avatar.tsx`** — the Phase-0 placeholder character: a hand-built SVG
-  silhouette with 5 tiers. The figure itself stays System-cyan
-  (`FIGURE` constant) regardless of dominant domain; only the aura glow behind
-  it takes the domain colour — tinting the whole figure was tried and reads as
-  a coloured blob, not a character. Tier 1 is deliberately unremarkable per the
-  "avatar may never depict something you haven't earned" rule in `AGENTS.md`.
-- **`LevelUpOverlay.tsx`** / **`TierUpOverlay.tsx`** — both implement the same
-  "beat of silence before the reveal" sequencing (dim → hold → reveal), just
-  with different content. Sound/haptics fire on reveal, not on trigger.
-- **`VerificationScreen.tsx`** — the honesty-system UI (see `AGENTS.md`). Only
-  shown for `weighty` quests (milestones/epics), never for daily quests.
+- **`StatBar.tsx`** — a domain bar. `trend` is optional and only rendered
+  when present — showing a fabricated "+0" before seasons (Phase 2) exist
+  would be exactly the "confidently wrong number" `DESIGN.md`'s Measures
+  section warns against, so `app/page.tsx` doesn't pass one yet.
+- **`Avatar.tsx`** — still the Phase-0 placeholder silhouette (real
+  illustrated tiers are Phase 2). The figure stays System-cyan regardless of
+  dominant domain; only the aura glow takes the domain colour. `decay` prop
+  now driven by real `daysAbsent` from the reducer.
+- **`LevelUpOverlay.tsx`** / **`TierUpOverlay.tsx`** — both implement the
+  "beat of silence before the reveal" sequencing. `TierUpOverlay` no longer
+  hardcodes a day count ("Earned across 187 days" was Phase 0 flavour text
+  that became a fabricated number once real data existed — removed).
+- **`VerificationScreen.tsx`** — the honesty-system UI. Only for `weighty`
+  quests. Now typed against `QuestRow` from `db/mappers.ts`, not the deleted
+  `lib/data.ts`.
 
 ### Sound, haptics, and external state (`lib/`)
 
-- **`lib/sound.ts`** — all audio is synthesized with the Web Audio API
-  (oscillators/noise buffers); there are no audio files in the repo. Mute state
-  is **not** React state — it lives in a small module-level store with a
-  `Set` of listeners (`subscribeMuted`/`isMuted`/`setMuted`), because mirroring
-  `localStorage` into `useState` via an effect trips ESLint's
+- **`lib/sound.ts`** — all audio synthesized with the Web Audio API; no audio
+  files in the repo. Mute state is **not** React state — it lives in a small
+  module-level store (`subscribeMuted`/`isMuted`/`setMuted`), because
+  mirroring `localStorage` into `useState` via an effect trips ESLint's
   `react-hooks/set-state-in-effect` rule and fails the build.
 - **`lib/haptics.ts`** — `navigator.vibrate` patterns, gated by the same mute
   flag from `lib/sound.ts`.
-- **`lib/hooks.ts`** — `useMuted()` and `useReducedMotion()`, both implemented
-  with `useSyncExternalStore` against a browser API/store rather than
-  `useState` + `useEffect`. This is the pattern to follow for any future
-  external state (media queries, localStorage, etc.) — see the comment at the
-  top of the file for why.
+- **`lib/hooks.ts`** — `useMuted()` and `useReducedMotion()`, both via
+  `useSyncExternalStore`. The pattern to follow for any future external state.
 
 ### Conventions
 
 - Path alias `@/*` → repo root (`tsconfig.json`).
-- `.tnum` class (defined in `globals.css`) on any number that animates, so
-  tabular figures don't jitter — `CountUp` already applies it.
-- `data-testid` on anything a test/automation script needs to drive (see
-  existing `quest-*`, `tier-up` testids in `app/page.tsx`).
+- `.tnum` class on any number that animates, so tabular figures don't
+  jitter — `CountUp` already applies it.
+- `data-testid` on anything a test/automation script needs to drive.
+- Never write to `event_log` from anywhere except `app/actions.ts`. Never let
+  an AI-touched code path write XP, level, or Integrity — see the AI boundary
+  in `AGENTS.md`.

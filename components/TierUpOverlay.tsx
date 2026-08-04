@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Avatar } from "./Avatar";
 import { play } from "@/lib/sound";
 import { buzz } from "@/lib/haptics";
-import { TIER_NAMES, TIER_V_INTEGRITY_REQUIRED } from "@/lib/data";
+import { TIER_NAMES, TIER_V_INTEGRITY_REQUIRED } from "@/lib/engine/rules";
 
 /**
  * The tier transformation.
@@ -83,7 +83,7 @@ export function TierUpOverlay({
               </p>
             ) : (
               <p className="mt-5 font-sys text-[11px] leading-relaxed text-ink-dim">
-                Earned across 187 days.
+                Earned through real action.
                 <br />
                 Nothing here was given to you.
               </p>

@@ -1,7 +1,7 @@
 "use client";
 
 import { CountUp } from "./CountUp";
-import type { Domain } from "@/lib/data";
+import type { DomainDisplayState } from "@/lib/engine/domains";
 
 /**
  * A domain bar. Always shows proximity, never raw totals — the goal
@@ -10,9 +10,16 @@ import type { Domain } from "@/lib/data";
  *
  * Trend is shown because the character sheet is meant to be an honest
  * X-ray of where effort actually goes. A negative trend is stated plainly,
- * never dressed up.
+ * never dressed up — and omitted entirely rather than shown as a
+ * fabricated "+0" when there's no season yet to compare against.
  */
-export function StatBar({ domain, max = 60 }: { domain: Domain; max?: number }) {
+export function StatBar({
+  domain,
+  max = 60,
+}: {
+  domain: DomainDisplayState;
+  max?: number;
+}) {
   const pct = Math.min(100, (domain.value / max) * 100);
 
   return (
@@ -31,13 +38,15 @@ export function StatBar({ domain, max = 60 }: { domain: Domain; max?: number }) 
         </div>
         <div className="flex items-baseline gap-2 font-sys">
           <CountUp value={domain.value} className="text-sm text-ink" />
-          <span
-            className={`text-[10px] tnum ${
-              domain.trend >= 0 ? "text-ink-dim" : "text-rust"
-            }`}
-          >
-            {domain.trend >= 0 ? `+${domain.trend}` : domain.trend}
-          </span>
+          {domain.trend !== undefined && (
+            <span
+              className={`text-[10px] tnum ${
+                domain.trend >= 0 ? "text-ink-dim" : "text-rust"
+              }`}
+            >
+              {domain.trend >= 0 ? `+${domain.trend}` : domain.trend}
+            </span>
+          )}
         </div>
       </div>
 

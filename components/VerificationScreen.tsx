@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { play } from "@/lib/sound";
 import { buzz } from "@/lib/haptics";
-import type { Quest } from "@/lib/data";
+import type { QuestRow } from "@/db/mappers";
 
 /**
  * The Verification Screen.
@@ -24,7 +24,7 @@ export function VerificationScreen({
   onConfirm,
   onNotYet,
 }: {
-  quest: Quest;
+  quest: QuestRow;
   onConfirm: (evidence: string) => void;
   onNotYet: () => void;
 }) {

@@ -85,6 +85,14 @@ export function decayFraction(daysAbsent: number): number {
 export const TIER_LEVEL_THRESHOLDS = [1, 10, 20, 35, 50];
 export const TIER_V_INTEGRITY_REQUIRED = 80;
 
+export const TIER_NAMES = [
+  "UNPROVEN",
+  "AWAKENED",
+  "TEMPERED",
+  "ASCENDANT",
+  "SOVEREIGN",
+] as const;
+
 export function tierForState(level: number, integrity: number): number {
   let tier = 1;
   for (let i = TIER_LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
