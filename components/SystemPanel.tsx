@@ -75,6 +75,19 @@ export function SystemPanel({
             </span>
           </button>
 
+          <button
+            onClick={() => window.location.reload()}
+            data-testid="force-resync"
+            className="flex min-h-11 w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-sys/5"
+          >
+            <span className="font-sys text-[12px] text-ink">
+              Resync with the record
+            </span>
+            <span className="font-sys text-[10px] tracking-[0.16em] text-ink-dim">
+              RELOAD
+            </span>
+          </button>
+
           <form action={signOut}>
             <button
               type="submit"

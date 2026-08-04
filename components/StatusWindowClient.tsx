@@ -17,7 +17,13 @@ import { reduce } from "@/lib/engine/reducer";
 import { evaluateRequisites } from "@/lib/engine/requisites";
 import type { SystemEvent } from "@/lib/engine/events";
 import { DOMAIN_KEYS, DOMAIN_DISPLAY, type DomainKey } from "@/lib/engine/domains";
-import { XP_BY_DIFFICULTY, TIER_NAMES, type Difficulty } from "@/lib/engine/rules";
+import {
+  XP_BY_DIFFICULTY,
+  TIER_NAMES,
+  MODULE_UNLOCK_LEVELS,
+  MATERIAL_LORE,
+  type Difficulty,
+} from "@/lib/engine/rules";
 import type { QuestRow, EpicRow } from "@/db/mappers";
 import { EpicsPanel } from "@/components/EpicsPanel";
 import { ChroniclePanel } from "@/components/ChroniclePanel";
@@ -30,7 +36,10 @@ import {
   buildLedger,
   buildDayReport,
   buildWeekReport,
+  buildPossessions,
 } from "@/lib/engine/chronicle";
+import { MATERIAL_NAMES, type Requisite } from "@/lib/engine/requisites";
+import { ITEM_LORE } from "@/lib/engine/rules";
 import { useActions } from "@/components/ActionsContext";
 
 type Toast = { id: number; text: string; color: string };
@@ -154,6 +163,11 @@ export function StatusWindowClient({
   // is what makes the optimistic update exact rather than approximate.
   const state = useMemo(() => reduce(events, new Date(), tz), [events, tz]);
 
+  // A module the character doesn't qualify for (a reset drops the level)
+  // renders as TODAY instead — derived at render, no effect needed.
+  const activeView =
+    state.level < MODULE_UNLOCK_LEVELS[view] ? ("today" as View) : view;
+
   const questTitleById = useMemo(
     () => Object.fromEntries(quests.map((q) => [q.id, q.title])),
     [quests],
@@ -163,6 +177,7 @@ export function StatusWindowClient({
     [events, questTitleById, tz],
   );
   const ledger = useMemo(() => buildLedger(events, tz), [events, tz]);
+  const possessions = useMemo(() => buildPossessions(events), [events]);
   const dayReport = useMemo(
     () => buildDayReport(events, new Date(), tz),
     [events, tz],
@@ -526,7 +541,7 @@ export function StatusWindowClient({
       )}
 
       {/* ================= STATUS ================= */}
-      {view === "status" && (
+      {activeView === "status" && (
       <>
       <Panel label="Status Window" delay={80}>
         <div className="flex items-center gap-3 p-4">
@@ -611,6 +626,55 @@ export function StatusWindowClient({
         </div>
       </Panel>
 
+      {/* Materials: the requisite economy made visible. A readout of the
+          raw domain stat — never spent, so absence can't un-earn it. */}
+      <Panel label="Materials" delay={300} className="mt-3">
+        <div className="grid grid-cols-3 gap-x-3 gap-y-2 px-4 py-3" data-testid="materials">
+          {DOMAIN_KEYS.map((k) => (
+            <div key={k} className="flex items-baseline justify-between gap-2">
+              <span className="truncate font-sys text-[9px] tracking-[0.1em] text-ink-faint">
+                {MATERIAL_NAMES[k].toUpperCase()}
+              </span>
+              <span className="tnum font-sys text-[11px] text-ink">
+                {state.domainsRaw[k]}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="border-t border-edge/40 px-4 py-2 font-sys text-[10px] leading-relaxed text-ink-faint">
+          {MATERIAL_LORE}
+        </p>
+      </Panel>
+
+      {/* Possessions: drops as things owned, not numbers that scrolled by. */}
+      <Panel label={`Possessions · ${possessions.length}`} delay={330} className="mt-3">
+        {possessions.length > 0 ? (
+          <ul data-testid="possessions">
+            {possessions.map((pn) => (
+              <li key={pn.item} className="border-b border-edge/30 px-4 py-2.5 last:border-b-0">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="truncate text-sm text-ink">{pn.item}</span>
+                  <span className="tnum shrink-0 font-sys text-[10px] text-integrity">
+                    ×{pn.count}
+                  </span>
+                </div>
+                {ITEM_LORE[pn.item] && (
+                  <p className="mt-0.5 font-sys text-[10px] text-ink-faint">
+                    {ITEM_LORE[pn.item]}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="px-4 py-5 text-center font-sys text-[12px] leading-relaxed text-ink-dim">
+            Nothing carried.
+            <br />
+            Drops come from real work, when they come at all.
+          </p>
+        )}
+      </Panel>
+
       <TitlesPanel
         state={state}
         events={events}
@@ -623,7 +687,7 @@ export function StatusWindowClient({
       )}
 
       {/* ================= TODAY ================= */}
-      {view === "today" && (
+      {activeView === "today" && (
       <>
       <Panel
         label={`Today · ${outstanding.length} remaining`}
@@ -742,6 +806,7 @@ export function StatusWindowClient({
           open={newQuestOpen}
           onOpenChange={setNewQuestOpen}
           epics={epics}
+          dailies={dailyQuests.filter((q) => q.cadence === "daily")}
           onCreated={(quest) => {
             setQuests((qs) => [...qs, quest]);
             setNewQuestOpen(false);
@@ -783,7 +848,7 @@ export function StatusWindowClient({
       )}
 
       {/* ================= CAMPAIGN ================= */}
-      {view === "campaign" && (
+      {activeView === "campaign" && (
         <>
           <EpicsPanel
             epics={epics}
@@ -895,12 +960,12 @@ export function StatusWindowClient({
       )}
 
       {/* ================= RECORD ================= */}
-      {view === "chronicle" && (
+      {activeView === "chronicle" && (
         <ChroniclePanel ledger={ledger} entries={chronicle} delay={80} />
       )}
 
       {/* ================= SYSTEM ================= */}
-      {view === "system" && (
+      {activeView === "system" && (
         <SystemPanel
           delay={80}
           onRejected={rejected}
@@ -974,7 +1039,12 @@ export function StatusWindowClient({
         />
       )}
 
-      <SystemNav view={view} onChange={setView} outstanding={outstanding.length} />
+      <SystemNav
+        view={activeView}
+        onChange={setView}
+        outstanding={outstanding.length}
+        level={state.level}
+      />
 
       {tierUp && (
         <TierUpOverlay
@@ -993,11 +1063,14 @@ function NewQuestForm({
   open,
   onOpenChange,
   epics,
+  dailies,
   onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   epics: EpicRow[];
+  /** Existing daily quests, offered as streak-requisite targets. */
+  dailies: QuestRow[];
   onCreated: (quest: QuestRow) => void;
 }) {
   const { createQuest } = useActions();
@@ -1009,6 +1082,11 @@ function NewQuestForm({
   const [whereText, setWhereText] = useState("");
   const [weighty, setWeighty] = useState(false);
   const [cadence, setCadence] = useState<"once" | "daily">("daily");
+  // Preparation the milestone will ask about. Optional; empty = ungated.
+  const [reqDomain, setReqDomain] = useState<"" | DomainKey>("");
+  const [reqAmount, setReqAmount] = useState("");
+  const [reqStreakQuest, setReqStreakQuest] = useState("");
+  const [reqStreakDays, setReqStreakDays] = useState("");
   const [grants, setGrants] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -1042,6 +1120,25 @@ function NewQuestForm({
     }
     setSubmitting(true);
     setError("");
+    // Assemble declared preparation. Server re-validates every field and
+    // derives the streak label from its own quest row, never from us.
+    const requisites: Requisite[] = [];
+    if (weighty && reqDomain && parseInt(reqAmount, 10) > 0) {
+      requisites.push({
+        kind: "material",
+        domain: reqDomain,
+        amount: parseInt(reqAmount, 10),
+      });
+    }
+    if (weighty && reqStreakQuest && parseInt(reqStreakDays, 10) > 1) {
+      requisites.push({
+        kind: "streak",
+        questId: reqStreakQuest,
+        days: parseInt(reqStreakDays, 10),
+        label: dailies.find((d) => d.id === reqStreakQuest)?.title ?? "a discipline",
+      });
+    }
+
     const result = await createQuest({
       epicId: epicId || null,
       title,
@@ -1052,6 +1149,7 @@ function NewQuestForm({
       weighty,
       cadence,
       grants,
+      requisites: requisites.length > 0 ? requisites : null,
     });
     setSubmitting(false);
     if (!result.ok || !result.id) {
@@ -1068,9 +1166,7 @@ function NewQuestForm({
       where_text: whereText.trim(),
       weighty,
       cadence: weighty ? "once" : cadence,
-      // Requisites are authored on the milestone after creation; a new
-      // one starts with none and behaves exactly as before.
-      requisites: null,
+      requisites: requisites.length > 0 ? requisites : null,
       grants: weighty ? grants.trim() || null : null,
       status: "active",
     });
@@ -1079,6 +1175,10 @@ function NewQuestForm({
     setWhereText("");
     setWeighty(false);
     setGrants("");
+    setReqDomain("");
+    setReqAmount("");
+    setReqStreakQuest("");
+    setReqStreakDays("");
   }
 
   return (
@@ -1236,6 +1336,96 @@ function NewQuestForm({
             className="mt-1.5 w-full border-b border-edge bg-transparent pb-1.5 font-sys text-sm text-ink placeholder:text-ink-faint focus:border-sys focus:outline-none"
           />
         </label>
+      )}
+
+      {weighty && (
+        <div className="mt-4 border-l-2 border-edge pl-3">
+          <p className="font-sys text-[10px] tracking-[0.2em] text-ink-faint">
+            PREPARATION (OPTIONAL)
+          </p>
+          <p className="mt-1 font-sys text-[10px] leading-relaxed text-ink-faint">
+            A gate you set for yourself. It never blocks the claim — it makes
+            an unready one say so.
+          </p>
+
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="font-sys text-[9px] tracking-[0.16em] text-ink-faint">
+                MATERIAL
+              </span>
+              <select
+                value={reqDomain}
+                onChange={(e) => setReqDomain(e.target.value as "" | DomainKey)}
+                data-testid="req-domain"
+                className="mt-1 w-full border-b border-edge bg-transparent pb-1 font-sys text-[12px] text-ink focus:border-sys focus:outline-none"
+              >
+                <option value="" className="bg-panel">
+                  None
+                </option>
+                {DOMAIN_KEYS.map((k) => (
+                  <option key={k} value={k} className="bg-panel">
+                    {MATERIAL_NAMES[k]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="font-sys text-[9px] tracking-[0.16em] text-ink-faint">
+                AMOUNT
+              </span>
+              <input
+                type="number"
+                min={1}
+                max={1000}
+                value={reqAmount}
+                onChange={(e) => setReqAmount(e.target.value)}
+                placeholder="e.g. 40"
+                data-testid="req-amount"
+                className="mt-1 w-full border-b border-edge bg-transparent pb-1 font-sys text-[12px] text-ink placeholder:text-ink-faint focus:border-sys focus:outline-none"
+              />
+            </label>
+          </div>
+
+          {dailies.length > 0 && (
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="font-sys text-[9px] tracking-[0.16em] text-ink-faint">
+                  STREAK ON
+                </span>
+                <select
+                  value={reqStreakQuest}
+                  onChange={(e) => setReqStreakQuest(e.target.value)}
+                  data-testid="req-streak-quest"
+                  className="mt-1 w-full border-b border-edge bg-transparent pb-1 font-sys text-[12px] text-ink focus:border-sys focus:outline-none"
+                >
+                  <option value="" className="bg-panel">
+                    None
+                  </option>
+                  {dailies.map((d) => (
+                    <option key={d.id} value={d.id} className="bg-panel">
+                      {d.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="font-sys text-[9px] tracking-[0.16em] text-ink-faint">
+                  CONSECUTIVE DAYS
+                </span>
+                <input
+                  type="number"
+                  min={2}
+                  max={365}
+                  value={reqStreakDays}
+                  onChange={(e) => setReqStreakDays(e.target.value)}
+                  placeholder="e.g. 21"
+                  data-testid="req-streak-days"
+                  className="mt-1 w-full border-b border-edge bg-transparent pb-1 font-sys text-[12px] text-ink placeholder:text-ink-faint focus:border-sys focus:outline-none"
+                />
+              </label>
+            </div>
+          )}
+        </div>
       )}
 
       {error && (

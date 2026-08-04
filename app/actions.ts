@@ -438,7 +438,61 @@ export type NewQuestInput = {
   weighty: boolean;
   cadence: "once" | "daily";
   grants?: string;
+  requisites?: Requisite[] | null;
 };
+
+const DOMAIN_SET = new Set([
+  "vitality",
+  "mind",
+  "craft",
+  "bonds",
+  "spirit",
+  "virtue",
+]);
+
+/**
+ * Client-authored requisites, rebuilt field by field. Milestone-kind
+ * requisites are not authorable yet; streak labels are derived from the
+ * user's own quest row, never accepted from the client; everything else
+ * is clamped to sane ranges. Returns null on anything malformed — a gate
+ * that can't be trusted is worse than no gate.
+ */
+async function sanitizeRequisites(
+  input: unknown,
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<Requisite[] | null | "invalid"> {
+  if (input == null) return null;
+  if (!Array.isArray(input) || input.length === 0 || input.length > 4) {
+    return "invalid";
+  }
+  const out: Requisite[] = [];
+  for (const raw of input) {
+    if (typeof raw !== "object" || raw === null) return "invalid";
+    const r = raw as Record<string, unknown>;
+    if (r.kind === "material") {
+      if (typeof r.domain !== "string" || !DOMAIN_SET.has(r.domain)) return "invalid";
+      const amount = Number(r.amount);
+      if (!Number.isInteger(amount) || amount < 1 || amount > 1000) return "invalid";
+      out.push({ kind: "material", domain: r.domain as DomainKey, amount });
+    } else if (r.kind === "streak") {
+      if (typeof r.questId !== "string") return "invalid";
+      const days = Number(r.days);
+      if (!Number.isInteger(days) || days < 2 || days > 365) return "invalid";
+      const { data: target } = await supabase
+        .from("quests")
+        .select("id, title, cadence")
+        .eq("id", r.questId)
+        .eq("user_id", userId)
+        .single();
+      if (!target || target.cadence !== "daily") return "invalid";
+      out.push({ kind: "streak", questId: target.id, days, label: target.title });
+    } else {
+      return "invalid";
+    }
+  }
+  return out;
+}
 
 /** Difficulty is fixed here and never edited after — declared before
  *  completion, never inflated after, per the covenant. */
@@ -466,6 +520,17 @@ export async function createQuest(
     epicId = epic.id;
   }
 
+  // Preparation is only meaningful on a milestone; rebuild it field by
+  // field rather than storing whatever arrived.
+  let requisites: Requisite[] | null = null;
+  if (input.weighty && input.requisites != null) {
+    const sanitized = await sanitizeRequisites(input.requisites, supabase, user.id);
+    if (sanitized === "invalid") {
+      return { ok: false, error: "That preparation could not be recorded." };
+    }
+    requisites = sanitized;
+  }
+
   const { data, error } = await supabase
     .from("quests")
     .insert({
@@ -479,6 +544,7 @@ export async function createQuest(
       weighty: input.weighty,
       // A milestone is claimed once, by definition — it can never recur.
       cadence: input.weighty ? "once" : input.cadence,
+      requisites,
       grants: input.weighty ? (input.grants?.trim() ?? null) : null,
       status: "active",
     })
@@ -525,6 +591,15 @@ export async function resetProgress(confirmation: string): Promise<ActionResult>
     .eq("user_id", user.id)
     .neq("status", "archived");
   if (questError) return { ok: false, error: questError.message };
+
+  // Epics too — the first live reset missed these, and a dead campaign
+  // surviving a "begin again" reads as the reset half-working.
+  const { error: epicError } = await supabase
+    .from("epics")
+    .update({ status: "abandoned" })
+    .eq("user_id", user.id)
+    .neq("status", "abandoned");
+  if (epicError) return { ok: false, error: epicError.message };
 
   // Back to an unnamed subject, so the first-run rite greets you again.
   const { error: profileError } = await supabase

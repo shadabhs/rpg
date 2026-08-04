@@ -1,6 +1,7 @@
 "use client";
 
 import { initAudio, play } from "@/lib/sound";
+import { MODULE_UNLOCK_LEVELS } from "@/lib/engine/rules";
 
 /**
  * The System's module bar. Fixed to the bottom because this is a
@@ -28,11 +29,15 @@ export function SystemNav({
   view,
   onChange,
   outstanding,
+  level,
 }: {
   view: View;
   onChange: (v: View) => void;
   /** Outstanding-today count, badged on TODAY. Never a fabricated number. */
   outstanding: number;
+  /** Character level — locked modules show their requirement (goal
+   *  gradient) and open silently when it's met. */
+  level: number;
 }) {
   return (
     <nav
@@ -43,6 +48,22 @@ export function SystemNav({
       <div className="mx-auto flex w-full max-w-md">
         {VIEWS.map((v) => {
           const active = v === view;
+          const locked = level < MODULE_UNLOCK_LEVELS[v];
+          if (locked) {
+            return (
+              <div
+                key={v}
+                data-testid={`nav-locked-${v}`}
+                aria-disabled
+                className="relative flex min-h-14 flex-1 flex-col items-center justify-center px-1 font-sys text-[9px] tracking-[0.14em] text-ink-faint opacity-50"
+              >
+                <span className="tracking-[0.3em]">···</span>
+                <span className="mt-0.5 text-[8px]">
+                  LV {MODULE_UNLOCK_LEVELS[v]}
+                </span>
+              </div>
+            );
+          }
           return (
             <button
               key={v}

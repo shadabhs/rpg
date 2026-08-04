@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Rajdhani, JetBrains_Mono, Inter } from "next/font/google";
 import "./globals.css";
+import { UpdateWatch } from "@/components/UpdateWatch";
 
 const rajdhani = Rajdhani({
   variable: "--font-rajdhani",
@@ -48,7 +49,10 @@ export default function RootLayout({
       lang="en"
       className={`${rajdhani.variable} ${jetbrains.variable} ${inter.variable} h-full antialiased`}
     >
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <UpdateWatch />
+        {children}
+      </body>
     </html>
   );
 }

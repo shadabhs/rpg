@@ -161,6 +161,27 @@ export function buildLedger(
   };
 }
 
+export type Possession = { item: string; count: number };
+
+/**
+ * The inventory, derived: every non-voided drop since the last reset,
+ * grouped and counted. Loot with no inventory is a number that scrolls
+ * away; a possession is a thing you have.
+ */
+export function buildPossessions(allEvents: SystemEvent[]): Possession[] {
+  const events = eventsSinceReset(allEvents);
+  const voided = voidedIds(events);
+  const counts = new Map<string, number>();
+  for (const ev of events) {
+    if (ev.type === "quest_completed" && !voided.has(ev.id) && ev.item) {
+      counts.set(ev.item, (counts.get(ev.item) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .map(([item, count]) => ({ item, count }))
+    .sort((a, b) => b.count - a.count || a.item.localeCompare(b.item));
+}
+
 export type DayReport = {
   /** XP actually banked today — cap-aware, computed as the difference of
    *  two full replays, never nominal-sum arithmetic. */

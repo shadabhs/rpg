@@ -100,6 +100,27 @@ export const ITEM_TABLE: Record<Difficulty, string[]> = {
   SEVERE: ["Sigil of the Long Road", "Coldforged Clasp", "Witness Stone"],
 };
 
+/** One line per item, shown in Possessions. The System's register: each
+ *  marks a real morning, never flatters. */
+export const ITEM_LORE: Record<string, string> = {
+  "Rust-flecked Token": "It proves nothing. It marks a day you showed up.",
+  "Bent Copper Pin": "Bent, kept anyway.",
+  "Worn Bootlace": "Worn through by use, which is the only honest way.",
+  "Field-Stitched Band": "Mended in the field, mid-effort.",
+  "Quenched Iron Nail": "Hardened by being put through it.",
+  "Traveller's Chalk": "For marking a route you actually walked.",
+  "Oath-Marked Coin": "Struck the day a word was kept.",
+  "Tempered Buckle": "Held under strain. Still holds.",
+  "Cartographer's Stub": "The pencil that mapped unfamiliar ground.",
+  "Sigil of the Long Road": "Given for distance, not speed.",
+  "Coldforged Clasp": "Made without heat, the hard way.",
+  "Witness Stone": "It was there when the difficult thing was done.",
+};
+
+/** What each material line under the domains means, stated once. */
+export const MATERIAL_LORE =
+  "Materials are earned by doing and are never spent. A gate asks whether you have them, not for them.";
+
 /** Neutral baseline. Integrity is never interviewed and only ever rises. */
 export const INTEGRITY_BASELINE = 10;
 
@@ -131,6 +152,21 @@ export function decayFraction(daysAbsent: number): number {
  *  honesty system made permanently visible on the avatar. */
 export const TIER_LEVEL_THRESHOLDS = [1, 10, 20, 35, 50];
 export const TIER_V_INTEGRITY_REQUIRED = 80;
+
+/**
+ * Progressive disclosure: which System modules exist at which level. A
+ * new subject sees only TODAY, STATUS and SYSTEM; the campaign layer and
+ * the archive REVEAL themselves at Level 2 — the interface itself grows
+ * through play, and a level visibly grants something. Purely
+ * informational gating: no XP or data is ever locked, only surfaces.
+ */
+export const MODULE_UNLOCK_LEVELS = {
+  status: 1,
+  today: 1,
+  campaign: 2,
+  chronicle: 2,
+  system: 1,
+} as const;
 
 export const TIER_NAMES = [
   "UNPROVEN",

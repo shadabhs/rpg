@@ -48,6 +48,7 @@ export default async function StatusWindowPage() {
     .from("epics")
     .select("id, title, intent, domain, status")
     .eq("user_id", user.id)
+    .neq("status", "abandoned")
     .order("created_at", { ascending: true });
 
   const { data: questRows, error: questsError } = await supabase
