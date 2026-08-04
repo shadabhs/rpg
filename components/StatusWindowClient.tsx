@@ -30,6 +30,7 @@ import { ChroniclePanel } from "@/components/ChroniclePanel";
 import { TitlesPanel } from "@/components/TitlesPanel";
 import { FirstRunRite } from "@/components/FirstRunRite";
 import { Induction } from "@/components/Induction";
+import { DictateButton } from "@/components/DictateButton";
 import { SystemPanel } from "@/components/SystemPanel";
 import { SystemNav, type View } from "@/components/SystemNav";
 import {
@@ -541,13 +542,30 @@ export function StatusWindowClient({
   return (
     <main className="mx-auto min-h-dvh w-full max-w-md px-4 pt-4 pb-24">
       {/* ---------------- header ---------------- */}
-      <div className="mb-3 flex items-baseline justify-between">
+      <div className="mb-3 flex items-center justify-between">
         <h1 className="font-sys text-[11px] tracking-[0.34em] text-sys">
           THE SYSTEM
         </h1>
-        <span className="tnum font-sys text-[10px] text-ink-faint">
-          SESSION {seconds}s
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="tnum font-sys text-[10px] text-ink-faint">
+            SESSION {seconds}s
+          </span>
+          {/* Installed as a standalone app there is no browser reload, so
+              the refresh lives where a browser would put it. */}
+          <button
+            onClick={() => window.location.reload()}
+            aria-label="Resync with the record"
+            data-testid="header-resync"
+            className="flex h-11 w-11 items-center justify-center text-ink-faint transition-colors hover:text-sys"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4">
+              <path
+                fill="currentColor"
+                d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {fault && (
@@ -1280,6 +1298,7 @@ function NewQuestForm({
           placeholder="e.g. Train — lower body"
           className="mt-1.5 w-full border-b border-edge bg-transparent pb-1.5 font-sys text-sm text-ink placeholder:text-ink-faint focus:border-sys focus:outline-none"
         />
+        <DictateButton value={title} onChange={setTitle} label="Dictate the title" />
       </label>
 
       <div className="mt-3 grid grid-cols-2 gap-3">

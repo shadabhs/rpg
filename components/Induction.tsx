@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { inductionTurn, inductionComplete } from "@/app/actions";
 import { initAudio, play } from "@/lib/sound";
 import { buzz } from "@/lib/haptics";
+import { DictateButton } from "@/components/DictateButton";
 
 /**
  * The Induction interview. The System asks; you answer; it proposes a
@@ -191,6 +192,15 @@ export function Induction({
                 data-testid="induction-input"
                 className="w-full border-b border-edge bg-transparent pb-2 font-sys text-sm text-ink placeholder:text-ink-faint focus:border-sys focus:outline-none"
               />
+
+              {/* Speaking is far faster than typing a real answer, and
+                  these answers are the whole point of the interview. */}
+              <DictateButton
+                value={draft}
+                onChange={setDraft}
+                label="Dictate your answer"
+              />
+
               <div className="mt-3 grid grid-cols-3 gap-2">
                 <button
                   type="button"

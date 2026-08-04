@@ -5,6 +5,7 @@ import { Panel } from "@/components/Panel";
 import { DOMAIN_KEYS, DOMAIN_DISPLAY, type DomainKey } from "@/lib/engine/domains";
 import type { EpicRow, QuestRow } from "@/db/mappers";
 import { useActions } from "@/components/ActionsContext";
+import { DictateButton } from "@/components/DictateButton";
 
 /**
  * The campaign layer. An epic is a named long-term goal; its milestones
@@ -287,6 +288,7 @@ function NewEpicForm({
           placeholder="Stated in your own words."
           className="mt-1.5 w-full border-b border-edge bg-transparent pb-1.5 font-sys text-sm text-ink placeholder:text-ink-faint focus:border-sys focus:outline-none"
         />
+        <DictateButton value={intent} onChange={setIntent} label="Dictate why this matters" />
       </label>
 
       <label className="mt-3 block">
