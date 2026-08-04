@@ -244,10 +244,14 @@ export function StatusWindowClient({
     // so — the QA pass found the silent no-op read as "the app ignored
     // me", which is worse than a refusal.
     if (isDaily ? state.questStats[quest.id]?.doneToday : quest.status !== "active") {
+      // System cyan, not ink-faint: the live QA pass proved a #3d4a60
+      // toast on the #05070D background is invisible to the eye (and to
+      // screenshots) while still passing DOM-text assertions. A refusal
+      // must be READABLE, not merely rendered.
       toast(
         isDaily ? "Already done today." : "Already resolved.",
-        "var(--color-ink-faint)",
-        1600,
+        "var(--color-sys)",
+        2200,
       );
       return;
     }
