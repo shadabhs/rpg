@@ -18,6 +18,8 @@ import { DOMAIN_KEYS, DOMAIN_DISPLAY, type DomainKey } from "@/lib/engine/domain
 import { XP_BY_DIFFICULTY, TIER_NAMES, type Difficulty } from "@/lib/engine/rules";
 import type { QuestRow, EpicRow } from "@/db/mappers";
 import { EpicsPanel } from "@/components/EpicsPanel";
+import { ChroniclePanel } from "@/components/ChroniclePanel";
+import { chronicleEntries, buildLedger } from "@/lib/engine/chronicle";
 import {
   completeQuest,
   undoCompletion,
@@ -62,6 +64,7 @@ export function StatusWindowClient({
     streak: number;
     previous: number;
   } | null>(null);
+  const [fault, setFault] = useState<string | null>(null);
 
   const [seconds, setSeconds] = useState(0);
   const toastId = useRef(0);
@@ -81,6 +84,16 @@ export function StatusWindowClient({
   // pure function the server uses to persist truth — running it here too
   // is what makes the optimistic update exact rather than approximate.
   const state = useMemo(() => reduce(events, new Date(), tz), [events, tz]);
+
+  const questTitleById = useMemo(
+    () => Object.fromEntries(quests.map((q) => [q.id, q.title])),
+    [quests],
+  );
+  const chronicle = useMemo(
+    () => chronicleEntries(events, questTitleById, tz),
+    [events, questTitleById, tz],
+  );
+  const ledger = useMemo(() => buildLedger(events, tz), [events, tz]);
 
   const domains = DOMAIN_KEYS.map((key) => ({
     key,
@@ -117,13 +130,23 @@ export function StatusWindowClient({
     prevTier.current = state.tier;
   }, [state.tier]);
 
-  function toast(text: string, color: string) {
+  function toast(text: string, color: string, durationMs = 1100) {
     const id = ++toastId.current;
     setToasts((t) => [...t, { id, text, color }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 1100);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), durationMs);
+  }
+
+  /** A server rejection reverts optimistic state — the player must SEE
+   *  that, or the revert reads as data loss on the next reload. Long
+   *  toast, and the same message pinned as a fault line under the header
+   *  until the next successful action. */
+  function rejected(error: string) {
+    setFault(error);
+    toast(`[ REJECTED ] ${error}`, "var(--color-rust)", 5000);
   }
 
   function optimisticAppend(event: SystemEvent) {
+    setFault(null); // a fresh attempt clears the pinned fault line
     const now = new Date();
     const before = reduce(events, now, tz);
     const nextEvents = [...events, event];
@@ -194,7 +217,7 @@ export function StatusWindowClient({
         );
       }
       setRecord(null);
-      toast(`[ REJECTED ] ${result.error}`, "var(--color-rust)");
+      rejected(result.error);
     }
   }
 
@@ -247,7 +270,7 @@ export function StatusWindowClient({
           qs.map((q) => (q.id === quest.id ? { ...q, status: "completed" } : q)),
         );
       }
-      toast(`[ REJECTED ] ${result.error}`, "var(--color-rust)");
+      rejected(result.error);
     }
   }
 
@@ -279,7 +302,7 @@ export function StatusWindowClient({
       setQuests((qs) =>
         qs.map((q) => (q.id === quest.id ? { ...q, status: "active" } : q)),
       );
-      toast(`[ REJECTED ] ${result.error}`, "var(--color-rust)");
+      rejected(result.error);
     }
   }
 
@@ -302,7 +325,7 @@ export function StatusWindowClient({
     const result = await declineClaim(quest.id);
     if (!result.ok) {
       revert(optimisticId);
-      toast(`[ REJECTED ] ${result.error}`, "var(--color-rust)");
+      rejected(result.error);
     }
   }
 
@@ -341,6 +364,20 @@ export function StatusWindowClient({
           </form>
         </div>
       </div>
+
+      {fault && (
+        <div
+          data-testid="fault-line"
+          className="mb-3 border border-rust/40 bg-rust/5 px-3 py-2"
+        >
+          <p className="font-sys text-[11px] leading-relaxed text-rust">
+            [ REJECTED ] {fault}
+          </p>
+          <p className="mt-1 font-sys text-[10px] text-ink-faint">
+            The action was reverted. Nothing was recorded.
+          </p>
+        </div>
+      )}
 
       {/* ---------------- status window ---------------- */}
       <Panel label="Status Window" delay={80}>
@@ -539,6 +576,8 @@ export function StatusWindowClient({
         delay={440}
         onCreated={(epic) => setEpics((es) => [...es, epic])}
       />
+
+      <ChroniclePanel ledger={ledger} entries={chronicle} delay={520} />
 
       {/* ---------------- close-out ---------------- */}
       {dayClosed && (

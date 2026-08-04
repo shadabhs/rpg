@@ -37,13 +37,13 @@ export default async function StatusWindowPage() {
     .eq("user_id", user.id)
     .single();
 
-  const { data: epicRows } = await supabase
+  const { data: epicRows, error: epicsError } = await supabase
     .from("epics")
     .select("id, title, intent, domain, status")
     .eq("user_id", user.id)
     .order("created_at", { ascending: true });
 
-  const { data: questRows } = await supabase
+  const { data: questRows, error: questsError } = await supabase
     .from("quests")
     .select(
       "id, epic_id, title, domain, difficulty, when_text, where_text, weighty, cadence, grants, status",
@@ -51,12 +51,44 @@ export default async function StatusWindowPage() {
     .eq("user_id", user.id)
     .order("created_at", { ascending: true });
 
-  const { data: eventRows } = await supabase
+  const { data: eventRows, error: eventsError } = await supabase
     .from("event_log")
     .select(
       "id, type, domain, difficulty, evidence, retracts_event_id, quest_id, occurred_at",
     )
     .eq("user_id", user.id);
+
+  // A failed read must fail LOUDLY. Swallowing it and rendering a fresh
+  // Level-1 character would show the player a confidently wrong state —
+  // "your history is gone" — when nothing was lost. The classic cause is
+  // a deploy whose selects name columns from a migration that hasn't been
+  // applied yet; the message below states exactly that.
+  const readFault = epicsError ?? questsError ?? eventsError;
+  if (readFault) {
+    return (
+      <main className="mx-auto flex min-h-dvh w-full max-w-md items-center px-4">
+        <div className="w-full border border-rust/40 bg-panel/60 px-5 py-6">
+          <p className="font-sys text-[11px] tracking-[0.34em] text-rust">
+            [ FAULT ]
+          </p>
+          <p className="mt-4 font-sys text-[13px] leading-relaxed text-ink-dim">
+            The System cannot read its own record.
+            <br />
+            Nothing has been erased — this is an infrastructure fault, not
+            data loss.
+          </p>
+          <p className="mt-4 border-l-2 border-rust/40 pl-3 font-sys text-[11px] leading-relaxed text-ink-faint">
+            {readFault.message}
+          </p>
+          <p className="mt-4 font-sys text-[11px] leading-relaxed text-ink-faint">
+            If this mentions a missing column or table, a database migration
+            in <span className="text-ink-dim">db/migrations/</span> has not
+            been applied yet.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   const events = ((eventRows ?? []) as EventRow[]).map(rowToEvent);
 

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { reduce } from "./reducer";
+import { chronicleEntries, buildLedger } from "./chronicle";
 import type { SystemEvent } from "./events";
 import type { DomainKey } from "./domains";
 import {
@@ -440,6 +441,119 @@ describe("tierForState — the Tier V honesty gate, tested directly", () => {
   });
 });
 
+describe("chronicle & ledger — the System's memory, derived not stored", () => {
+  const titles = { train: "Train — lower body" };
+
+  it("renders completions as [DONE] lines and drops undone ones entirely", () => {
+    const events: SystemEvent[] = [
+      {
+        type: "quest_completed",
+        id: "a",
+        timestamp: iso(0),
+        domain: "vitality",
+        difficulty: "STANDARD",
+        questId: "train",
+      },
+      {
+        type: "quest_completed",
+        id: "oops",
+        timestamp: iso(1),
+        domain: "vitality",
+        difficulty: "STANDARD",
+        questId: "train",
+      },
+      {
+        type: "completion_retracted",
+        id: "u1",
+        timestamp: iso(1),
+        retractsEventId: "oops",
+      },
+    ];
+    const entries = chronicleEntries(events, titles, 0);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].tag).toBe("[DONE]");
+    expect(entries[0].text).toBe("Train — lower body");
+  });
+
+  it("orders newest first and words honesty events in the System's voice", () => {
+    const events: SystemEvent[] = [
+      { type: "claim_declined", id: "d1", timestamp: iso(0) },
+      {
+        type: "claim_verified",
+        id: "m1",
+        timestamp: iso(1),
+        domain: "craft",
+        difficulty: "SEVERE",
+        evidence: "shipped v1",
+      },
+      {
+        type: "claim_retracted",
+        id: "r1",
+        timestamp: iso(2),
+        retractsEventId: "m1",
+      },
+    ];
+    const entries = chronicleEntries(events, {}, 0);
+    expect(entries.map((e) => e.tag)).toEqual([
+      "[RETRACTED]",
+      "[CLAIMED]",
+      "[HELD BACK]",
+    ]);
+    expect(entries[1].text).toContain("shipped v1");
+    expect(entries[0].text).toContain("Nothing refunded");
+  });
+
+  it("counts the ledger from witnessed events only", () => {
+    const events: SystemEvent[] = [
+      {
+        type: "quest_completed",
+        id: "a",
+        timestamp: iso(0),
+        domain: "vitality",
+        difficulty: "STANDARD",
+        questId: "train",
+      },
+      {
+        type: "quest_completed",
+        id: "b",
+        timestamp: iso(0),
+        domain: "mind",
+        difficulty: "TRIVIAL",
+        questId: "read",
+      },
+      {
+        type: "quest_completed",
+        id: "c",
+        timestamp: iso(1),
+        domain: "vitality",
+        difficulty: "STANDARD",
+        questId: "train",
+      },
+      {
+        type: "completion_retracted",
+        id: "u1",
+        timestamp: iso(1),
+        retractsEventId: "c",
+      },
+      {
+        type: "claim_verified",
+        id: "m1",
+        timestamp: iso(2),
+        domain: "craft",
+        difficulty: "SEVERE",
+        evidence: "",
+      },
+      { type: "claim_declined", id: "d1", timestamp: iso(3) },
+    ];
+    const ledger = buildLedger(events, 0);
+    // Day 1's only completion was undone, so it is not an active day.
+    expect(ledger.daysActive).toBe(2);
+    expect(ledger.questsCompleted).toBe(2);
+    expect(ledger.milestonesClaimed).toBe(1);
+    expect(ledger.timesHeldBack).toBe(1);
+  });
+});
+
 describe("the AI boundary is structurally enforced, not just documented", () => {
   const forbidden = [
     "fetch(",
@@ -453,7 +567,10 @@ describe("the AI boundary is structurally enforced, not just documented", () => 
     "Math.random",
   ];
 
-  for (const file of ["reducer.ts", "rules.ts"]) {
+  // chronicle.ts is held to the same standard: the System's voice is
+  // deterministic — an AI may later rephrase what it derives, but the
+  // derivation itself must never reach for a network or an LLM.
+  for (const file of ["reducer.ts", "rules.ts", "chronicle.ts"]) {
     it(`${file} contains no network I/O, randomness, or AI-client imports`, () => {
       const source = readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
       for (const needle of forbidden) {
