@@ -107,11 +107,18 @@ without depth · no emoji as icons · no uniform sizing.
 
 ## Current state
 
-**Phase 0 — the feel test.** Fake data only, no auth, no database, no AI, no real
-art. Its only job is to answer: does the loop feel good and does the tone land?
-It is **disposable by intent** — most of it gets replaced in Phase 1.
+**Phase 1, most of the way in.** Auth, database, and real event-sourced
+progression are live. Phase 0's fake data (`lib/data.ts`) is deleted — nothing
+imports it, and nothing should reintroduce it.
 
-`lib/data.ts` is fake and should not be imported after Phase 0.
+Built and browser-verified: the quest loop with misclick undo, recurring dailies
+with streaks and `[RECORD]` moments, epics and milestones, the Chronicle and
+Real-World Ledger, earned titles with concealed (`???`) discovery, variable loot,
+the close-out ritual with day and week reports, the first-run rite, and
+**Requisites** (preparation as an honest gate — see `DESIGN.md`).
+
+Not built: the AI Induction interview (deferred — needs a provider decision, see
+the AI boundary), vices, Measures, seasons, real avatar art, push triggers.
 
 ## Conventions
 
