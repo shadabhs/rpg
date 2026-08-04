@@ -428,6 +428,81 @@ export async function createEpic(input: {
   return { ok: true, id: data.id };
 }
 
+/**
+ * Rename an epic or restate why it matters. Cosmetic fields only — an
+ * epic's domain and its milestones are what give it meaning, and letting
+ * those be edited after the fact would let a finished campaign be quietly
+ * turned into a different one.
+ */
+export async function updateEpic(
+  epicId: string,
+  input: { title: string; intent: string },
+): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!input.title.trim()) return { ok: false, error: "An epic needs a name." };
+
+  const { error } = await supabase
+    .from("epics")
+    .update({ title: input.title.trim(), intent: input.intent.trim() || null })
+    .eq("id", epicId)
+    .eq("user_id", user.id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Abandon an epic. Not a delete: `epics` has no DELETE policy, and the
+ * quests that hung off it stay in the record. Abandoning hides it from
+ * the campaign and is honest about what happened — you set it down.
+ */
+export async function abandonEpic(epicId: string): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  const { error } = await supabase
+    .from("epics")
+    .update({ status: "abandoned" })
+    .eq("id", epicId)
+    .eq("user_id", user.id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Remove a quest that was never acted on. Deliberately restricted to
+ * quests with NO completions on record: once a quest has real history it
+ * is archived instead, because deleting it would orphan events that the
+ * Chronicle still names. RLS independently permits delete only while a
+ * quest is `active`.
+ */
+export async function removeQuest(questId: string): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+
+  const { data: history, error: histError } = await supabase
+    .from("event_log")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("quest_id", questId)
+    .limit(1);
+  if (histError) return { ok: false, error: histError.message };
+
+  if (history && history.length > 0) {
+    const { error } = await supabase
+      .from("quests")
+      .update({ status: "archived" })
+      .eq("id", questId)
+      .eq("user_id", user.id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }
+
+  const { error } = await supabase
+    .from("quests")
+    .delete()
+    .eq("id", questId)
+    .eq("user_id", user.id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export type NewQuestInput = {
   epicId?: string | null;
   title: string;

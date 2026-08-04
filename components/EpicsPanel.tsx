@@ -18,14 +18,54 @@ export function EpicsPanel({
   epics,
   quests,
   onCreated,
+  onChanged,
+  onRejected,
   delay,
 }: {
   epics: EpicRow[];
   quests: QuestRow[];
   onCreated: (epic: EpicRow) => void;
+  /** Applied optimistically; null status means "abandoned, drop it". */
+  onChanged: (epic: EpicRow) => void;
+  onRejected: (error: string) => void;
   delay?: number;
 }) {
+  const { updateEpic, abandonEpic } = useActions();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftIntent, setDraftIntent] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function saveEdit(epic: EpicRow) {
+    if (!draftTitle.trim() || busy) return;
+    setBusy(true);
+    let res;
+    try {
+      res = await updateEpic(epic.id, { title: draftTitle, intent: draftIntent });
+    } catch {
+      res = { ok: false as const, error: "The System could not be reached." };
+    }
+    setBusy(false);
+    if (!res.ok) return onRejected(res.error);
+    onChanged({ ...epic, title: draftTitle.trim(), intent: draftIntent.trim() || null });
+    setEditing(null);
+  }
+
+  async function abandon(epic: EpicRow) {
+    if (busy) return;
+    setBusy(true);
+    let res;
+    try {
+      res = await abandonEpic(epic.id);
+    } catch {
+      res = { ok: false as const, error: "The System could not be reached." };
+    }
+    setBusy(false);
+    if (!res.ok) return onRejected(res.error);
+    onChanged({ ...epic, status: "abandoned" });
+    setEditing(null);
+  }
   const active = epics.filter((e) => e.status !== "abandoned");
 
   return (
@@ -87,6 +127,64 @@ export function EpicsPanel({
                       </p>
                     )}
                   </>
+                )}
+
+                {editing === epic.id ? (
+                  <div className="animate-rise mt-3 border-t border-edge/40 pt-3">
+                    <input
+                      value={draftTitle}
+                      onChange={(e) => setDraftTitle(e.target.value)}
+                      data-testid={`epic-edit-title-${epic.id}`}
+                      className="w-full border-b border-edge bg-transparent pb-1.5 font-sys text-sm text-ink focus:border-sys focus:outline-none"
+                    />
+                    <input
+                      value={draftIntent}
+                      onChange={(e) => setDraftIntent(e.target.value)}
+                      placeholder="Why this matters"
+                      data-testid={`epic-edit-intent-${epic.id}`}
+                      className="mt-2 w-full border-b border-edge bg-transparent pb-1.5 font-sys text-[12px] text-ink placeholder:text-ink-faint focus:border-sys focus:outline-none"
+                    />
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() => setEditing(null)}
+                        className="min-h-11 border border-edge font-sys text-[10px] tracking-[0.14em] text-ink-dim"
+                      >
+                        CANCEL
+                      </button>
+                      <button
+                        onClick={() => abandon(epic)}
+                        disabled={busy}
+                        data-testid={`epic-abandon-${epic.id}`}
+                        className="min-h-11 border border-rust/50 font-sys text-[10px] tracking-[0.14em] text-rust disabled:opacity-40"
+                      >
+                        ABANDON
+                      </button>
+                      <button
+                        onClick={() => saveEdit(epic)}
+                        disabled={busy || !draftTitle.trim()}
+                        data-testid={`epic-save-${epic.id}`}
+                        className="min-h-11 border border-sys/60 bg-sys/10 font-sys text-[10px] tracking-[0.14em] text-sys-bright disabled:opacity-40"
+                      >
+                        SAVE
+                      </button>
+                    </div>
+                    <p className="mt-2 font-sys text-[10px] leading-relaxed text-ink-faint">
+                      Abandoning sets it down. The quests inside it and
+                      everything you did stay on the record.
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setEditing(epic.id);
+                      setDraftTitle(epic.title);
+                      setDraftIntent(epic.intent ?? "");
+                    }}
+                    data-testid={`epic-open-${epic.id}`}
+                    className="mt-2 min-h-11 w-full border border-edge/60 font-sys text-[10px] tracking-[0.16em] text-ink-faint transition-colors hover:border-sys/50 hover:text-sys"
+                  >
+                    EDIT · ABANDON
+                  </button>
                 )}
               </li>
             );

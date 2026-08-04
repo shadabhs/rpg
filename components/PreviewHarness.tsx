@@ -211,6 +211,9 @@ export function PreviewHarness({ scenario }: { scenario: Scenario }) {
       confirmation.trim().toUpperCase() === "RESET"
         ? ok
         : { ok: false as const, error: "Confirmation not given. Nothing was changed." },
+    updateEpic: async () => ok,
+    abandonEpic: async () => ok,
+    removeQuest: async () => ok,
     // No server to resync from — harness truth lives in the client.
     resync: () => {},
     // A deliberate failure path, driven by a magic title, so the harness

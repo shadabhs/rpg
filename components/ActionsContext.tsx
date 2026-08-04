@@ -11,6 +11,9 @@ import {
   chooseTitle,
   setCharacterName,
   resetProgress,
+  updateEpic,
+  abandonEpic,
+  removeQuest,
 } from "@/app/actions";
 
 /**
@@ -36,6 +39,9 @@ export type ActionSet = {
   chooseTitle: typeof chooseTitle;
   setCharacterName: typeof setCharacterName;
   resetProgress: typeof resetProgress;
+  updateEpic: typeof updateEpic;
+  abandonEpic: typeof abandonEpic;
+  removeQuest: typeof removeQuest;
   /** Re-pull server truth after a successful mutation. Absent in the real
    *  set — the component falls back to router.refresh() — and a no-op in
    *  the preview harness, whose "server" is in-memory client state. */
@@ -52,6 +58,9 @@ const REAL_ACTIONS: ActionSet = {
   chooseTitle,
   setCharacterName,
   resetProgress,
+  updateEpic,
+  abandonEpic,
+  removeQuest,
 };
 
 const ActionsContext = createContext<ActionSet>(REAL_ACTIONS);

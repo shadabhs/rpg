@@ -73,7 +73,8 @@ export function StatusWindowClient({
   const tz = useTzOffsetMinutes();
   const router = useRouter();
   const actions = useActions();
-  const { completeQuest, undoCompletion, verifyClaim, declineClaim } = actions;
+  const { completeQuest, undoCompletion, verifyClaim, declineClaim, removeQuest } =
+    actions;
   /** Re-pull server truth. The live QA pass found a state where the UI and
    *  the database disagreed and NOTHING would reconcile them short of a
    *  manual reload — the client never refetched. Now every successful
@@ -441,6 +442,24 @@ export function StatusWindowClient({
     resync();
   }
 
+  /** Remove a quest declared by mistake. The server deletes it only when
+   *  it has no history; anything with real completions is archived so the
+   *  Chronicle never names an event whose quest vanished. */
+  async function handleRemove(quest: QuestRow) {
+    if (busy) return;
+    const previous = quests;
+    setQuests((qs) => qs.filter((q) => q.id !== quest.id));
+    const result = await safeCall(quest.id, () => removeQuest(quest.id));
+    if (!result.ok) {
+      setQuests(previous);
+      rejected(result.error);
+      return;
+    }
+    play("deny");
+    toast("[ REMOVED ] It is no longer asked of you.", "var(--color-ink-dim)", 2200);
+    resync();
+  }
+
   async function onConfirmVerify(evidence: string) {
     const quest = verifying;
     if (!quest) return;
@@ -541,7 +560,7 @@ export function StatusWindowClient({
       )}
 
       {/* ================= STATUS ================= */}
-      {activeView === "status" && (
+      <div className={activeView === "status" ? "" : "hidden"}>
       <>
       <Panel label="Status Window" delay={80}>
         <div className="flex items-center gap-3 p-4">
@@ -684,10 +703,10 @@ export function StatusWindowClient({
         delay={360}
       />
       </>
-      )}
+      </div>
 
       {/* ================= TODAY ================= */}
-      {activeView === "today" && (
+      <div className={activeView === "today" ? "" : "hidden"}>
       <>
       <Panel
         label={`Today · ${outstanding.length} remaining`}
@@ -777,6 +796,18 @@ export function StatusWindowClient({
                     </span>
                   </button>
 
+                  {!done && (
+                    <button
+                      onClick={() => handleRemove(q)}
+                      disabled={busy === q.id}
+                      data-testid={`remove-${q.id}`}
+                      aria-label={`Remove ${q.title}`}
+                      className="mr-3 min-h-11 shrink-0 self-stretch border border-edge px-3 font-sys text-[10px] tracking-[0.14em] text-ink-faint transition-colors hover:border-rust/60 hover:text-rust disabled:opacity-40"
+                    >
+                      ✕
+                    </button>
+                  )}
+
                   {/* Misclick escape hatch. Never on weighty quests — a
                       verified claim only exits via the seasonal audit. */}
                   {done && !q.weighty && (
@@ -845,16 +876,24 @@ export function StatusWindowClient({
         </Panel>
       )}
       </>
-      )}
+      </div>
 
       {/* ================= CAMPAIGN ================= */}
-      {activeView === "campaign" && (
+      <div className={activeView === "campaign" ? "" : "hidden"}>
         <>
           <EpicsPanel
             epics={epics}
             quests={quests}
             delay={80}
             onCreated={(epic) => setEpics((es) => [...es, epic])}
+            onChanged={(epic) =>
+              setEpics((es) =>
+                epic.status === "abandoned"
+                  ? es.filter((e) => e.id !== epic.id)
+                  : es.map((e) => (e.id === epic.id ? epic : e)),
+              )
+            }
+            onRejected={rejected}
           />
 
           {/* Milestones live here, not in TODAY. A claim is a statement
@@ -957,15 +996,15 @@ export function StatusWindowClient({
             )}
           </Panel>
         </>
-      )}
+      </div>
 
       {/* ================= RECORD ================= */}
-      {activeView === "chronicle" && (
+      <div className={activeView === "chronicle" ? "" : "hidden"}>
         <ChroniclePanel ledger={ledger} entries={chronicle} delay={80} />
-      )}
+      </div>
 
       {/* ================= SYSTEM ================= */}
-      {activeView === "system" && (
+      <div className={activeView === "system" ? "" : "hidden"}>
         <SystemPanel
           delay={80}
           onRejected={rejected}
@@ -985,7 +1024,7 @@ export function StatusWindowClient({
             }
           }}
         />
-      )}
+      </div>
 
       <p className="mt-6 text-center font-sys text-[10px] leading-relaxed text-ink-faint">
         The goal of the game is not to play the game.
