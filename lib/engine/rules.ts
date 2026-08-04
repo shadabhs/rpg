@@ -154,17 +154,23 @@ export const TIER_LEVEL_THRESHOLDS = [1, 10, 20, 35, 50];
 export const TIER_V_INTEGRITY_REQUIRED = 80;
 
 /**
- * Progressive disclosure: which System modules exist at which level. A
- * new subject sees only TODAY, STATUS and SYSTEM; the campaign layer and
- * the archive REVEAL themselves at Level 2 — the interface itself grows
- * through play, and a level visibly grants something. Purely
- * informational gating: no XP or data is ever locked, only surfaces.
+ * Which System modules exist at which level. ALL AT 1, deliberately.
+ *
+ * An earlier version gated CAMPAIGN and RECORD behind Level 2 as
+ * "progressive disclosure". It was a mistake: after a reset a player is
+ * Level 1, so the campaign layer disappeared and the product became a
+ * literal todo list — destroying the exact depth the epics exist to
+ * provide. Depth must be present on day one; discovery belongs in
+ * TITLES (concealed until earned), never in hiding the game itself.
+ *
+ * Kept as a table rather than deleted so the nav's lock rendering stays
+ * exercised and any future gate is a one-line, deliberate decision.
  */
 export const MODULE_UNLOCK_LEVELS = {
   status: 1,
   today: 1,
-  campaign: 2,
-  chronicle: 2,
+  campaign: 1,
+  chronicle: 1,
   system: 1,
 } as const;
 

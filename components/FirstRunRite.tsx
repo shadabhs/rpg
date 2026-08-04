@@ -146,7 +146,7 @@ export function FirstRunRite({
             <button
               onClick={close}
               data-testid="rite-close"
-              className="mt-8 w-full border border-sys/60 bg-sys/10 py-3.5 font-sys text-[11px] tracking-[0.24em] text-sys-bright transition-colors hover:bg-sys/20"
+              className="mt-8 min-h-12 w-full border border-sys/60 bg-sys/10 font-sys text-[11px] tracking-[0.24em] text-sys-bright transition-colors hover:bg-sys/20"
             >
               BEGIN
             </button>

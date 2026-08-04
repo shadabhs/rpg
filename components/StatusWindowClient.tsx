@@ -29,6 +29,7 @@ import { EpicsPanel } from "@/components/EpicsPanel";
 import { ChroniclePanel } from "@/components/ChroniclePanel";
 import { TitlesPanel } from "@/components/TitlesPanel";
 import { FirstRunRite } from "@/components/FirstRunRite";
+import { Induction } from "@/components/Induction";
 import { SystemPanel } from "@/components/SystemPanel";
 import { SystemNav, type View } from "@/components/SystemNav";
 import {
@@ -70,6 +71,10 @@ export function StatusWindowClient({
   const [riteOpen, setRiteOpen] = useState(
     characterName === "SUBJECT" && initialEvents.length === 0,
   );
+  /** The interview follows the rite for a genuinely new character, and
+   *  only when nothing has been declared yet — it proposes a starting
+   *  structure, so it must not land on top of one. */
+  const [inductionOpen, setInductionOpen] = useState(false);
   const tz = useTzOffsetMinutes();
   const router = useRouter();
   const actions = useActions();
@@ -1047,7 +1052,21 @@ export function StatusWindowClient({
       {riteOpen && (
         <FirstRunRite
           onNamed={setCharName}
-          onDone={() => setRiteOpen(false)}
+          onDone={() => {
+            setRiteOpen(false);
+            if (initialQuests.length === 0) setInductionOpen(true);
+          }}
+        />
+      )}
+
+      {inductionOpen && (
+        <Induction
+          onSkip={() => setInductionOpen(false)}
+          onDone={(statement) => {
+            setInductionOpen(false);
+            if (statement) toast(statement, "var(--color-sys)", 8000);
+            resync();
+          }}
         />
       )}
 

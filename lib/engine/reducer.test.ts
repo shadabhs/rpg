@@ -1093,6 +1093,23 @@ describe("progress_reset — a replay boundary, never a deletion", () => {
 });
 
 describe("the AI boundary is structurally enforced, not just documented", () => {
+  it("no engine file imports the AI layer, now that one exists", () => {
+    const dir = new URL("./", import.meta.url);
+    for (const file of [
+      "reducer.ts",
+      "rules.ts",
+      "chronicle.ts",
+      "titles.ts",
+      "requisites.ts",
+      "events.ts",
+      "domains.ts",
+    ]) {
+      const source = readFileSync(new URL(file, dir), "utf8");
+      expect(source.includes("lib/ai")).toBe(false);
+      expect(source.includes("@/lib/ai")).toBe(false);
+    }
+  });
+
   const forbidden = [
     "fetch(",
     "XMLHttpRequest",

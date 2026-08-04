@@ -9,6 +9,8 @@ import { rowToEvent, type EventRow } from "@/db/mappers";
 import { rollLoot } from "@/lib/loot";
 import { selectableTitles } from "@/lib/engine/titles";
 import { evaluateRequisites, type Requisite } from "@/lib/engine/requisites";
+import { aiConfigured } from "@/lib/ai/client";
+import { interviewTurn, buildPlan } from "@/lib/ai/induction";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -684,6 +686,122 @@ export async function resetProgress(confirmation: string): Promise<ActionResult>
   if (profileError) return { ok: false, error: profileError.message };
 
   return { ok: true };
+}
+
+/**
+ * INDUCTION — the AI-conducted opening interview.
+ *
+ * Two actions, and the boundary between them is the AI boundary itself:
+ * `inductionTurn` lets the model produce WORDS, `inductionComplete`
+ * writes ROWS — epics and quests only. Neither grants a single point of
+ * XP, level, domain or Integrity. A newly inducted character is Level 1
+ * with every domain at zero, exactly like one who skipped the interview,
+ * because progression is earned only by real action.
+ *
+ * The transcript is never persisted. It lives in the client for the
+ * duration of the conversation and is discarded — per DESIGN.md, we
+ * derive the character from the interview and then delete the interview.
+ */
+export async function inductionTurn(
+  history: { role: "user" | "assistant"; content: string }[],
+): Promise<
+  | { ok: true; text: string; ready: boolean }
+  | { ok: false; error: string; unavailable?: boolean }
+> {
+  await requireUser();
+
+  if (!aiConfigured()) {
+    return {
+      ok: false,
+      unavailable: true,
+      error: "No interviewer is connected. Proceed without one.",
+    };
+  }
+  // Bound the transcript: an interview is short by design, and this also
+  // caps what a single session can spend against a free tier.
+  const trimmed = history.slice(-24).map((m) => ({
+    role: m.role,
+    content: String(m.content).slice(0, 2000),
+  }));
+
+  try {
+    const { text, ready } = await interviewTurn(trimmed);
+    return { ok: true, text, ready };
+  } catch {
+    return {
+      ok: false,
+      unavailable: true,
+      error: "The interviewer could not be reached. Proceed without one.",
+    };
+  }
+}
+
+/**
+ * Turn the interview into real structure. The model PROPOSES; this
+ * writes only what survives sanitisation in lib/ai/induction.ts, through
+ * the same insert paths any hand-declared quest uses.
+ */
+export async function inductionComplete(
+  history: { role: "user" | "assistant"; content: string }[],
+): Promise<ActionResult & { statement?: string }> {
+  const { supabase, user } = await requireUser();
+  if (!aiConfigured()) return { ok: false, error: "No interviewer is connected." };
+
+  let plan;
+  try {
+    plan = await buildPlan(
+      history.slice(-24).map((m) => ({
+        role: m.role,
+        content: String(m.content).slice(0, 2000),
+      })),
+    );
+  } catch {
+    return { ok: false, error: "The interviewer could not be reached." };
+  }
+
+  // Epics first, so quests can point at real ids.
+  const epicIds: string[] = [];
+  for (const e of plan.epics) {
+    const { data, error } = await supabase
+      .from("epics")
+      .insert({
+        user_id: user.id,
+        title: e.title,
+        intent: e.intent || null,
+        domain: e.domain,
+        status: "active",
+      })
+      .select("id")
+      .single();
+    if (error || !data) return { ok: false, error: error?.message ?? "Insert failed." };
+    epicIds.push(data.id);
+  }
+
+  for (const q of plan.quests) {
+    const { error } = await supabase.from("quests").insert({
+      user_id: user.id,
+      epic_id: q.epicIndex !== undefined ? (epicIds[q.epicIndex] ?? null) : null,
+      title: q.title,
+      domain: q.domain,
+      difficulty: q.difficulty,
+      when_text: q.whenText,
+      where_text: q.whereText,
+      weighty: false,
+      cadence: q.cadence,
+      requisites: null,
+      grants: null,
+      status: "active",
+    });
+    if (error) return { ok: false, error: error.message };
+  }
+
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ induction_completed_at: new Date().toISOString() })
+    .eq("user_id", user.id);
+  if (profileError) return { ok: false, error: profileError.message };
+
+  return { ok: true, statement: plan.statement };
 }
 
 export async function signOut() {
