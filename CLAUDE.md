@@ -267,3 +267,10 @@ these tokens rather than introducing new colours or one-off transitions.
 - **Diagnose a failing check before touching it.** Of the browser suite's first
   seven failures, six were the test's fault and one was a wrong fixture in my own
   fix. Weakening an assertion to get green would have buried a real defect.
+- **A triple-zero symptom means the input never happened.** Three QA passes
+  chased an UNDO "bug" showing no toast, no network call, no DB write, and no
+  console error — a combination no code path could produce, since every branch
+  emits UI feedback before or regardless of the server. The click was missing a
+  ~24px target. When remote-driven QA reports impossible symptoms, verify the
+  input mechanism (DOM-dispatched `.click()`) before debugging the stack — and
+  keep tap targets ≥44px in a phone-first app so precision never matters.
