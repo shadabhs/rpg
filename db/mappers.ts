@@ -1,6 +1,7 @@
 import type { SystemEvent } from "@/lib/engine/events";
 import type { DomainKey } from "@/lib/engine/domains";
 import type { Difficulty } from "@/lib/engine/rules";
+import type { Requisite } from "@/lib/engine/requisites";
 
 /** Raw shape of an `epics` row as returned by the Supabase client. */
 export type EpicRow = {
@@ -22,6 +23,7 @@ export type QuestRow = {
   where_text: string;
   weighty: boolean;
   cadence: "once" | "daily";
+  requisites: Requisite[] | null;
   grants: string | null;
   status: "active" | "completed" | "archived";
 };
@@ -50,6 +52,7 @@ export type EventRow = {
   quest_id: string | null;
   gold: number | null;
   item: string | null;
+  unprepared: boolean | null;
   occurred_at: string;
 };
 
@@ -74,6 +77,8 @@ export function rowToEvent(row: EventRow): SystemEvent {
         domain: row.domain as DomainKey,
         difficulty: row.difficulty as Difficulty,
         evidence: row.evidence ?? "",
+        questId: row.quest_id ?? undefined,
+        unprepared: row.unprepared ?? undefined,
       };
     case "claim_declined":
       return { type: "claim_declined", id: row.id, timestamp: row.occurred_at };

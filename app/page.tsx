@@ -46,7 +46,7 @@ export default async function StatusWindowPage() {
   const { data: questRows, error: questsError } = await supabase
     .from("quests")
     .select(
-      "id, epic_id, title, domain, difficulty, when_text, where_text, weighty, cadence, grants, status",
+      "id, epic_id, title, domain, difficulty, when_text, where_text, weighty, cadence, requisites, grants, status",
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: true });
@@ -54,7 +54,7 @@ export default async function StatusWindowPage() {
   const { data: eventRows, error: eventsError } = await supabase
     .from("event_log")
     .select(
-      "id, type, domain, difficulty, evidence, retracts_event_id, quest_id, gold, item, occurred_at",
+      "id, type, domain, difficulty, evidence, retracts_event_id, quest_id, gold, item, unprepared, occurred_at",
     )
     .eq("user_id", user.id);
 

@@ -8,6 +8,7 @@ import { localDayStart, reduce } from "@/lib/engine/reducer";
 import { rowToEvent, type EventRow } from "@/db/mappers";
 import { rollLoot } from "@/lib/loot";
 import { selectableTitles } from "@/lib/engine/titles";
+import { evaluateRequisites, type Requisite } from "@/lib/engine/requisites";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -115,7 +116,16 @@ export async function completeQuest(
   return { ok: true, gold: loot.gold, item: loot.item };
 }
 
-/** "I HAVE DONE THIS" on the Verification Screen. */
+/**
+ * "I HAVE DONE THIS" on the Verification Screen.
+ *
+ * Requisites never block this. Per DESIGN.md, the System cannot see your
+ * life and must not assert authority over it — someone who trained
+ * elsewhere for a year would otherwise be called a liar by a database.
+ * An unmet-requisite claim grants FULL XP and costs no Integrity; it is
+ * merely recorded as unprepared so the Chronicle stays accurate. The flag
+ * is re-derived server-side rather than trusted from the client.
+ */
 export async function verifyClaim(
   questId: string,
   evidence: string,
@@ -134,6 +144,24 @@ export async function verifyClaim(
 
   const now = new Date().toISOString();
 
+  // Re-derive preparedness from the log rather than trusting the client.
+  let unprepared = false;
+  if (Array.isArray(quest.requisites) && quest.requisites.length > 0) {
+    const { data: eventRows, error: readError } = await supabase
+      .from("event_log")
+      .select(
+        "id, type, domain, difficulty, evidence, retracts_event_id, quest_id, gold, item, unprepared, occurred_at",
+      )
+      .eq("user_id", user.id);
+    if (readError) return { ok: false, error: readError.message };
+    const events = ((eventRows ?? []) as EventRow[]).map(rowToEvent);
+    unprepared = !evaluateRequisites(
+      quest.requisites as Requisite[],
+      reduce(events),
+      events,
+    ).met;
+  }
+
   const { error: insertError } = await supabase.from("event_log").insert({
     user_id: user.id,
     type: "claim_verified",
@@ -141,6 +169,7 @@ export async function verifyClaim(
     difficulty: quest.difficulty,
     evidence,
     quest_id: quest.id,
+    unprepared,
     occurred_at: now,
   });
   if (insertError) return { ok: false, error: insertError.message };
@@ -305,7 +334,7 @@ export async function chooseTitle(titleName: string): Promise<ActionResult> {
   const { data: eventRows, error: readError } = await supabase
     .from("event_log")
     .select(
-      "id, type, domain, difficulty, evidence, retracts_event_id, quest_id, gold, item, occurred_at",
+      "id, type, domain, difficulty, evidence, retracts_event_id, quest_id, gold, item, unprepared, occurred_at",
     )
     .eq("user_id", user.id);
   if (readError) return { ok: false, error: readError.message };

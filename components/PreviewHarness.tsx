@@ -60,6 +60,7 @@ function seed(scenario: Scenario): {
       where_text: "Gym",
       weighty: false,
       cadence: "daily",
+      requisites: null,
       grants: null,
       status: "active",
     },
@@ -73,6 +74,7 @@ function seed(scenario: Scenario): {
       where_text: "From the balcony",
       weighty: false,
       cadence: "once",
+      requisites: null,
       grants: null,
       status: "active",
     },
@@ -86,6 +88,13 @@ function seed(scenario: Scenario): {
       cadence: "once",
       when_text: "When ready",
       where_text: "The stairwell",
+      // Deliberately unmet: 40 Conditioning against ~8 earned, and a
+      // 21-day run against a best of 4. Exercises the [LOCKED] state and
+      // the honest override.
+      requisites: [
+        { kind: "material", domain: "vitality", amount: 40 },
+        { kind: "streak", questId: "q-daily", days: 21, label: "Train — lower body" },
+      ],
       grants: "[Breath of the Ascent]",
       status: "active",
     },

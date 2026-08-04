@@ -32,6 +32,12 @@ export type SystemEvent =
       domain: DomainKey;
       difficulty: Difficulty;
       evidence: string;
+      questId?: string;
+      /** Claimed while its requisites were unmet — the honest override.
+       *  Grants full XP and costs no Integrity (doing a thing you weren't
+       *  "ready" for is not dishonesty); it exists so the record stays
+       *  accurate about what preparation was on file at the time. */
+      unprepared?: boolean;
     }
   | {
       /** The player chose NOT YET. Grants Integrity, nothing else. */

@@ -2,6 +2,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -80,6 +81,9 @@ export const quests = pgTable(
     whenText: text("when_text").notNull(),
     whereText: text("where_text").notNull(),
     weighty: boolean("weighty").notNull().default(false),
+    /** Requisite[] (lib/engine/requisites.ts) — preparation this milestone
+     *  declares. Null/empty means it behaves exactly as before. */
+    requisites: jsonb("requisites"),
     grants: text("grants"),
     /** 'once' quests flip to completed and leave the list; 'daily' quests
      *  stay active forever — "done today" is derived from quest_completed
@@ -120,6 +124,8 @@ export const eventLog = pgTable(
      *  forbids randomness there); replay just sums what was rolled. */
     gold: integer("gold"), // quest_completed only
     item: text("item"), // quest_completed only, flavour drop
+    /** claim_verified only — the honest override was used. */
+    unprepared: boolean("unprepared"),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

@@ -13,6 +13,7 @@ import { initAudio, play, setMuted } from "@/lib/sound";
 import { useMuted, useTzOffsetMinutes } from "@/lib/hooks";
 import { buzz } from "@/lib/haptics";
 import { reduce } from "@/lib/engine/reducer";
+import { evaluateRequisites } from "@/lib/engine/requisites";
 import type { SystemEvent } from "@/lib/engine/events";
 import { DOMAIN_KEYS, DOMAIN_DISPLAY, type DomainKey } from "@/lib/engine/domains";
 import { XP_BY_DIFFICULTY, TIER_NAMES, type Difficulty } from "@/lib/engine/rules";
@@ -133,6 +134,11 @@ export function StatusWindowClient({
 
   const epicOf = (q: QuestRow) =>
     q.epic_id ? (epics.find((e) => e.id === q.epic_id) ?? null) : null;
+
+  /** Preparation on file for a milestone. Never gates the claim itself —
+   *  it only changes what the Verification Screen says. */
+  const requisitesFor = (q: QuestRow) =>
+    evaluateRequisites(q.requisites, state, events);
 
   const outstanding = quests.filter(isOutstanding);
   const hasAnyQuests = quests.length > 0;
@@ -582,6 +588,14 @@ export function StatusWindowClient({
                       >
                         {isDaily ? `DAILY · ${q.difficulty}` : q.difficulty}
                       </span>
+                      {q.weighty && !done && !requisitesFor(q).met && (
+                        <span
+                          className="block font-sys text-[9px] tracking-[0.12em] text-rust"
+                          data-testid={`locked-${q.id}`}
+                        >
+                          LOCKED
+                        </span>
+                      )}
                       <span className="tnum block font-sys text-[11px] text-ink-dim">
                         {XP_BY_DIFFICULTY[q.difficulty]} XP
                       </span>
@@ -701,6 +715,7 @@ export function StatusWindowClient({
         <VerificationScreen
           quest={verifying}
           epic={epicOf(verifying)}
+          requisites={requisitesFor(verifying)}
           onConfirm={onConfirmVerify}
           onNotYet={onNotYet}
         />
@@ -801,6 +816,9 @@ function NewQuestForm({
       where_text: whereText.trim(),
       weighty,
       cadence: weighty ? "once" : cadence,
+      // Requisites are authored on the milestone after creation; a new
+      // one starts with none and behaves exactly as before.
+      requisites: null,
       grants: weighty ? grants.trim() || null : null,
       status: "active",
     });

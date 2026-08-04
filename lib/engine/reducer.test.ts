@@ -8,6 +8,7 @@ import {
   buildWeekReport,
 } from "./chronicle";
 import { TITLE_DEFS, selectableTitles, DEFAULT_TITLE } from "./titles";
+import { evaluateRequisites } from "./requisites";
 import type { SystemEvent } from "./events";
 import type { DomainKey } from "./domains";
 import {
@@ -729,6 +730,123 @@ describe("day & week reports — the close-out's numbers, cap-aware", () => {
   });
 });
 
+describe("requisites — preparation as an honest gate", () => {
+  const trainDays = (n: number): SystemEvent[] =>
+    Array.from({ length: n }, (_, i) => ({
+      type: "quest_completed",
+      id: `t${i}`,
+      timestamp: iso(i),
+      domain: "vitality",
+      difficulty: "STANDARD",
+      questId: "train",
+    }));
+
+  it("is met when there are no requisites at all — nothing existing changes", () => {
+    const report = evaluateRequisites(null, reduce([]), []);
+    expect(report.met).toBe(true);
+    expect(report.statuses).toHaveLength(0);
+  });
+
+  it("states the exact shortfall on a material threshold, never a bare 'locked'", () => {
+    const events = trainDays(3); // 3 x STANDARD = 6 raw vitality
+    const report = evaluateRequisites(
+      [{ kind: "material", domain: "vitality", amount: 40 }],
+      reduce(events, new Date(iso(2))),
+      events,
+    );
+    expect(report.met).toBe(false);
+    expect(report.statuses[0].have).toBe(6);
+    expect(report.statuses[0].need).toBe(40);
+    expect(report.statuses[0].text).toContain("Requires 40 Conditioning");
+    expect(report.statuses[0].text).toContain("You have 6");
+  });
+
+  it("reads materials from the RAW domain value, so absence never un-earns preparation", () => {
+    const events = trainDays(30);
+    const fresh = reduce(events, new Date(iso(29)));
+    const longAbsent = reduce(events, new Date(iso(900)));
+    // Rust has visibly reduced the displayed stat...
+    expect(longAbsent.domains.vitality).toBeLessThan(longAbsent.domainsRaw.vitality);
+    // ...but the requisite reads the same either way: the reps were done.
+    const req = [{ kind: "material" as const, domain: "vitality" as const, amount: 40 }];
+    expect(evaluateRequisites(req, longAbsent, events).statuses[0].have).toBe(
+      evaluateRequisites(req, fresh, events).statuses[0].have,
+    );
+  });
+
+  it("satisfies a component-milestone requisite only once that claim is on the record", () => {
+    const req = [
+      { kind: "milestone" as const, questId: "m-incorporate", label: "Incorporated" },
+    ];
+    expect(evaluateRequisites(req, reduce([]), []).met).toBe(false);
+
+    const claimed: SystemEvent[] = [
+      {
+        type: "claim_verified",
+        id: "c1",
+        timestamp: iso(0),
+        domain: "craft",
+        difficulty: "HARD",
+        evidence: "cert",
+        questId: "m-incorporate",
+      },
+    ];
+    expect(evaluateRequisites(req, reduce(claimed), claimed).met).toBe(true);
+  });
+
+  it("judges a streak requisite on the best run ever, so it cannot be crammed but is never lost", () => {
+    const events = trainDays(10);
+    const req = [
+      { kind: "streak" as const, questId: "train", days: 21, label: "Train" },
+    ];
+    const atTen = reduce(events, new Date(iso(9)));
+    expect(evaluateRequisites(req, atTen, events).statuses[0].have).toBe(10);
+    expect(evaluateRequisites(req, atTen, events).met).toBe(false);
+
+    // Long after the streak lapsed, the capability it proved still counts.
+    const lapsed = reduce(events, new Date(iso(400)));
+    expect(lapsed.questStats.train.streak).toBe(0);
+    expect(evaluateRequisites(req, lapsed, events).statuses[0].have).toBe(10);
+  });
+
+  it("requires every requisite, and counts exactly how many are unmet", () => {
+    const events = trainDays(3);
+    const state = reduce(events, new Date(iso(2)));
+    const report = evaluateRequisites(
+      [
+        { kind: "material", domain: "vitality", amount: 40 },
+        { kind: "streak", questId: "train", days: 21, label: "Train" },
+        { kind: "material", domain: "vitality", amount: 1 }, // already met
+      ],
+      state,
+      events,
+    );
+    expect(report.met).toBe(false);
+    expect(report.unmetCount).toBe(2);
+    expect(report.statuses.filter((s) => s.met)).toHaveLength(1);
+  });
+
+  it("COVENANT: a requisite is only ever a report — it can never withhold XP", () => {
+    // The gate lives entirely in evaluateRequisites; reduce() has no
+    // knowledge of it, so an unprepared claim pays exactly like any other.
+    const unprepared: SystemEvent = {
+      type: "claim_verified",
+      id: "m1",
+      timestamp: iso(0),
+      domain: "vitality",
+      difficulty: "SEVERE",
+      evidence: "ran it anyway",
+      questId: "m-half",
+      unprepared: true,
+    };
+    const prepared: SystemEvent = { ...unprepared, id: "m2", unprepared: false };
+    expect(reduce([unprepared]).totalXp).toBe(XP_BY_DIFFICULTY.SEVERE);
+    expect(reduce([unprepared]).totalXp).toBe(reduce([prepared]).totalXp);
+    // And it costs no Integrity: doing a thing early is not dishonesty.
+    expect(reduce([unprepared]).integrity).toBe(INTEGRITY_BASELINE);
+  });
+});
+
 describe("the AI boundary is structurally enforced, not just documented", () => {
   const forbidden = [
     "fetch(",
@@ -747,7 +865,7 @@ describe("the AI boundary is structurally enforced, not just documented", () => 
   // later rephrase what they derive, but the derivation itself must
   // never reach for a network, randomness, or an LLM. (Loot's
   // Math.random lives in lib/loot.ts, outside the engine, by design.)
-  for (const file of ["reducer.ts", "rules.ts", "chronicle.ts", "titles.ts"]) {
+  for (const file of ["reducer.ts", "rules.ts", "chronicle.ts", "titles.ts", "requisites.ts"]) {
     it(`${file} contains no network I/O, randomness, or AI-client imports`, () => {
       const source = readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
       for (const needle of forbidden) {

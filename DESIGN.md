@@ -305,6 +305,109 @@ Calibration UI, ciphers and vault tiers ship in Phase 2 — same pattern as vice
 
 ---
 
+## Requisites — preparation as a gate
+
+*Origin: LifeAfter. Its actual loop is grind → resources → assemble the right gear → the
+gear is what lets you clear the next area. Reflecting on it, the moment-to-moment gameplay
+was thin; the **structure** was the thing — you always knew what you were short of, and why
+you couldn't proceed yet.*
+
+That structure is worth taking. The time-sink around it is not.
+
+### The governing principle
+
+> **Preparation gates the attempt — and the gate is honest, because in reality it is true.**
+
+This is the rare case where a game mechanic makes the app *more* truthful rather than less.
+You genuinely cannot run a half marathon on two weeks of training. You genuinely cannot ship
+the company without the skill or the runway. A System that says so plainly is not gamifying;
+it is **refusing to flatter**, which is exactly the voice this product already commits to.
+
+Compare the two framings — the second is the entire design:
+
+| A normal habit app | The System |
+|---|---|
+| "Mark 'Run half marathon' complete?" | `[LOCKED] Requires 40 Conditioning. You have 23.`<br>`Nothing prevents you attempting this. The record simply won't pretend you were ready.` |
+
+### Materials — a readout of the grind, never a second grind
+
+Six materials, one per domain, earned automatically from completions already being logged.
+**No new action is ever required to farm them.** They are a *reading* of work already done:
+
+| Domain | Material | Means |
+|---|---|---|
+| VITALITY | **Conditioning** | reps put in |
+| MIND | **Insight** | hours of attention |
+| CRAFT | **Leverage** | capability compounded |
+| BONDS | **Trust** | showing up for people |
+| SPIRIT | **Stillness** | practice sustained |
+| VIRTUE | **Standing** | how you have actually behaved |
+
+**Materials are thresholds, never currency.** They are never spent, never traded, never
+bought, and never decay. Spending them would make a milestone *purchasable*, and the covenant
+forbids buying progress. Not spending them is also the truthful model: real capability is not
+consumed when you use it.
+
+### The three requisite kinds
+
+A milestone may declare any combination:
+
+1. **Material threshold** — `40 Conditioning`. You did the reps.
+2. **Component milestones** — other milestones claimed first. This is LifeAfter's part-collection
+   and dependency chain, made of real achievements: *Founder's Signet* requires
+   `Incorporated` + `First paying customer` + `Three months runway`.
+3. **Streak requisite** — `21 consecutive days on Train`. Sustained, so it cannot be crammed
+   the week before.
+
+The System always shows the **exact shortfall**, never a bare "locked". Proximity is the
+motivator (`goal gradient`), and a stated number is the honest form of it.
+
+### The honest override — non-negotiable
+
+**A locked milestone must always remain claimable.** The System cannot see your life and must
+never assert authority over it; someone who trained elsewhere for a year would otherwise be
+called a liar by a database. So a locked milestone offers `I DID IT ANYWAY`, routed through
+the Verification Screen with extra weight.
+
+It grants the **full XP** — real action earns real progress, always, per the covenant. There
+is **no penalty and no Integrity loss**: claiming something you actually did is not
+dishonesty. The only consequence is that the Chronicle records the requisites were unmet,
+because the record's whole job is to be accurate.
+
+### Gear grants access, never power
+
+Items assembled from requisites may unlock **content and cosmetics** — new epic templates,
+avatar elements, harder difficulty bands, panels. They may **never** grant an XP multiplier,
+a stat bonus, or a shortcut.
+
+> **Gating content on demonstrated capability is honest. Granting power for equipment is not.**
+
+This is the line that keeps the LifeAfter texture without importing its economy.
+
+### Explicitly rejected from the source material
+
+- **Energy caps / stamina timers.** Engineered to make you return. Directly anti-thesis.
+- **Daily login rewards.** Celebrates app usage, which the tone spec forbids outright.
+- **Artificial scarcity and repetitive farming.** The grind here must *be* the life; a grind
+  invented by the app is time stolen from it.
+- **Anything that raises time-in-app.** The test from `AGENTS.md` stands: more time in the
+  app, or more time in the life?
+
+### Guardrails against this design's own failure modes
+
+- **Do not resurrect the balance trap.** Requisites are *within-domain by default*.
+  Cross-domain requirements only when the player's own goal genuinely has them — otherwise a
+  deliberately lopsided season (rule 2 above) would be punished by the gate.
+- **The player authors requisites**, at milestone creation. Later, AI may *propose* them
+  during Induction — but per the AI boundary, only deterministic code ever *evaluates* one.
+  An LLM must never decide whether a gate is met.
+- **Requisites are optional.** A milestone with none behaves exactly as milestones do today.
+  Nothing existing breaks, and a player who finds this fiddly can ignore it entirely.
+- **Never gate a level.** Levels track XP, and XP tracks real action — that mirror stays
+  unbroken. Gate *content*, gate *claims*, never the number that reflects what you did.
+
+---
+
 ## Look and feel
 
 ### Design brief: where "sense of purpose" actually comes from

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { play } from "@/lib/sound";
 import { buzz } from "@/lib/haptics";
 import type { QuestRow } from "@/db/mappers";
+import type { RequisiteReport } from "@/lib/engine/requisites";
 
 /**
  * The Verification Screen.
@@ -22,6 +23,7 @@ import type { QuestRow } from "@/db/mappers";
 export function VerificationScreen({
   quest,
   epic,
+  requisites,
   onConfirm,
   onNotYet,
 }: {
@@ -30,6 +32,10 @@ export function VerificationScreen({
    *  player's own words for why the thing matters — is what makes
    *  claiming a chapter weigh something. */
   epic?: { title: string; intent: string | null } | null;
+  /** Preparation on file. Never blocks the claim — see DESIGN.md
+   *  "Requisites": the System cannot see your life and must not assert
+   *  authority over it. It states the shortfall and lets you proceed. */
+  requisites?: RequisiteReport;
   onConfirm: (evidence: string) => void;
   onNotYet: () => void;
 }) {
@@ -86,6 +92,35 @@ export function VerificationScreen({
           </div>
         )}
 
+        {/* Preparation on file. Stated as a shortfall with exact numbers —
+            never a bare "locked", because proximity is the honest form of
+            a gate. It does not disable anything below it. */}
+        {requisites && requisites.statuses.length > 0 && (
+          <div
+            className={`mt-5 border-l-2 pl-4 ${
+              requisites.met ? "border-integrity/40" : "border-rust/50"
+            }`}
+            data-testid="requisites"
+          >
+            <p className="font-sys text-[10px] tracking-[0.2em] text-ink-faint">
+              {requisites.met ? "PREPARATION — MET" : "[ LOCKED ] PREPARATION"}
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {requisites.statuses.map((s, i) => (
+                <li
+                  key={i}
+                  className={`font-sys text-[12px] leading-relaxed ${
+                    s.met ? "text-ink-dim" : "text-rust"
+                  }`}
+                >
+                  {s.met ? "· " : "× "}
+                  {s.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <p className="mt-8 font-sys text-[13px] leading-relaxed text-ink-dim">
           The System cannot check this.
           <br />
@@ -113,12 +148,24 @@ export function VerificationScreen({
           </span>
         </p>
 
+        {/* The honest override. A locked milestone stays claimable and pays
+            in full — nothing about being "unready" makes a real deed less
+            real. Only the wording changes, so the record can be accurate. */}
+        {requisites && !requisites.met && (
+          <p className="mt-6 font-sys text-[12px] leading-relaxed text-ink-faint">
+            Nothing here prevents you claiming this. If you have done it, say
+            so — it pays the same. The record will simply note that the
+            preparation above was not on file.
+          </p>
+        )}
+
         <div className="mt-8 grid gap-2.5">
           <button
             onClick={() => onConfirm(evidence)}
+            data-testid="confirm-claim"
             className="border border-sys/60 bg-sys/10 py-3.5 font-sys text-[11px] tracking-[0.24em] text-sys-bright transition-colors hover:bg-sys/20 active:bg-sys/30"
           >
-            I HAVE DONE THIS
+            {requisites && !requisites.met ? "I DID IT ANYWAY" : "I HAVE DONE THIS"}
           </button>
           <button
             onClick={onNotYet}
