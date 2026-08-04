@@ -198,8 +198,14 @@ export function StatusWindowClient({
   const requisitesFor = (q: QuestRow) =>
     evaluateRequisites(q.requisites, state, events);
 
-  const outstanding = quests.filter(isOutstanding);
-  const hasAnyQuests = quests.length > 0;
+  /** TODAY holds the tap-to-complete work. Milestones are claims against
+   *  a campaign, not chores — mixing them into the same list made a
+   *  solemn Verification Screen look like another checkbox. */
+  const dailyQuests = quests.filter((q) => !q.weighty);
+  const milestoneQuests = quests.filter((q) => q.weighty);
+
+  const outstanding = dailyQuests.filter(isOutstanding);
+  const hasAnyQuests = dailyQuests.length > 0;
   const dayClosed = hasAnyQuests && outstanding.length === 0;
   const xpPct = Math.min(100, (state.xpIntoLevel / state.xpForNextLevel) * 100);
 
@@ -626,7 +632,7 @@ export function StatusWindowClient({
       >
         {hasAnyQuests ? (
           <ul>
-            {quests.map((q) => {
+            {dailyQuests.map((q) => {
               const domain = DOMAIN_DISPLAY[q.domain];
               const stats = state.questStats[q.id];
               const isDaily = q.cadence === "daily";
@@ -778,12 +784,114 @@ export function StatusWindowClient({
 
       {/* ================= CAMPAIGN ================= */}
       {view === "campaign" && (
-        <EpicsPanel
-          epics={epics}
-          quests={quests}
-          delay={80}
-          onCreated={(epic) => setEpics((es) => [...es, epic])}
-        />
+        <>
+          <EpicsPanel
+            epics={epics}
+            quests={quests}
+            delay={80}
+            onCreated={(epic) => setEpics((es) => [...es, epic])}
+          />
+
+          {/* Milestones live here, not in TODAY. A claim is a statement
+              about a chapter of your life; listing it beside "brush teeth"
+              made the Verification Screen read as another checkbox. */}
+          <Panel
+            label={`Milestones · ${milestoneQuests.filter((q) => q.status === "active").length} unclaimed`}
+            delay={200}
+            className="mt-3"
+          >
+            {milestoneQuests.length > 0 ? (
+              <ul>
+                {milestoneQuests.map((q) => {
+                  const domain = DOMAIN_DISPLAY[q.domain];
+                  const claimed = q.status !== "active";
+                  const locked = !claimed && !requisitesFor(q).met;
+                  return (
+                    <li
+                      key={q.id}
+                      className="flex items-center border-b border-edge/40 last:border-b-0"
+                    >
+                      <button
+                        onClick={() => handleQuestTap(q)}
+                        disabled={busy === q.id}
+                        data-testid={`quest-${q.id}`}
+                        className={`flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-sys/5 ${
+                          claimed ? "opacity-40" : ""
+                        }`}
+                      >
+                        <span
+                          className="flex h-6 w-6 shrink-0 items-center justify-center border text-[11px]"
+                          style={{
+                            borderColor: claimed ? "var(--color-edge)" : domain.color,
+                            color: domain.color,
+                          }}
+                        >
+                          {claimed ? "✓" : ""}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          {epicOf(q) && (
+                            <span
+                              className="block truncate font-sys text-[9px] tracking-[0.16em]"
+                              style={{ color: domain.color, opacity: 0.75 }}
+                            >
+                              {epicOf(q)!.title.toUpperCase()}
+                            </span>
+                          )}
+                          <span
+                            className={`block truncate text-sm ${
+                              claimed ? "text-ink-faint line-through" : "text-ink"
+                            }`}
+                          >
+                            {q.title}
+                          </span>
+                          <span className="mt-0.5 block truncate font-sys text-[10px] text-ink-faint">
+                            {q.when_text} · {q.where_text}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span
+                            className="block font-sys text-[10px] tracking-[0.12em]"
+                            style={{ color: domain.color }}
+                          >
+                            {q.difficulty}
+                          </span>
+                          {locked && (
+                            <span
+                              className="block font-sys text-[9px] tracking-[0.12em] text-rust"
+                              data-testid={`locked-${q.id}`}
+                            >
+                              LOCKED
+                            </span>
+                          )}
+                        </span>
+                      </button>
+
+                      {/* Same-day misclick window. Older claims stand and
+                          exit only through the seasonal audit. */}
+                      {claimed && (
+                        <button
+                          onClick={() => handleUndo(q)}
+                          disabled={busy === q.id}
+                          data-testid={`undo-${q.id}`}
+                          aria-label={`Undo claim of ${q.title}`}
+                          className="mr-3 min-h-11 shrink-0 self-stretch border border-edge px-3.5 font-sys text-[10px] tracking-[0.14em] text-ink-faint transition-colors hover:border-rust/60 hover:text-rust disabled:opacity-40"
+                        >
+                          UNDO
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="px-4 py-5 text-center font-sys text-[12px] leading-relaxed text-ink-dim">
+                No milestones declared.
+                <br />
+                An epic advances only when one is claimed.
+              </p>
+            )}
+          </Panel>
+        </>
       )}
 
       {/* ================= RECORD ================= */}
@@ -797,11 +905,19 @@ export function StatusWindowClient({
           delay={80}
           onRejected={rejected}
           onReset={() => {
-            // The server appended the boundary event; pull the fresh,
-            // empty state rather than guessing at it locally.
-            toast("[ RESET ] The record begins again.", "var(--color-sys)", 3000);
-            setView("status");
-            resync();
+            // A FULL page load, not router.refresh(). Reset changes props
+            // that are only read at mount — `riteOpen` is seeded from the
+            // profile name, so after a reset the first-run rite would not
+            // greet you again until you happened to reload. That is
+            // exactly what "I had to sign out and back in" was.
+            toast("[ RESET ] The record begins again.", "var(--color-sys)", 2000);
+            if (actions.resync) {
+              // Harness: no real navigation to perform.
+              setView("status");
+              actions.resync();
+            } else {
+              setTimeout(() => window.location.assign("/"), 700);
+            }
           }}
         />
       )}

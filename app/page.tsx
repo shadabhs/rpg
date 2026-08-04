@@ -56,6 +56,10 @@ export default async function StatusWindowPage() {
       "id, epic_id, title, domain, difficulty, when_text, where_text, weighty, cadence, requisites, grants, status",
     )
     .eq("user_id", user.id)
+    // Archived quests are retired — a reset archives everything, and
+    // without this filter they kept rendering as struck-through rows, so
+    // a reset that HAD worked in the database looked like it hadn't.
+    .neq("status", "archived")
     .order("created_at", { ascending: true });
 
   const { data: eventRows, error: eventsError } = await supabase

@@ -269,12 +269,6 @@ export async function undoCompletion(
     .single();
 
   if (fetchError || !quest) return { ok: false, error: "Quest not found." };
-  if (quest.weighty) {
-    return {
-      ok: false,
-      error: "Verified claims are retracted at the seasonal audit, not undone.",
-    };
-  }
   const isDaily = quest.cadence === "daily";
   // A daily quest never leaves 'active', so status can't gate its undo; a
   // once quest must actually be completed.
@@ -293,7 +287,7 @@ export async function undoCompletion(
     .select("id, type, retracts_event_id, occurred_at")
     .eq("user_id", user.id)
     .eq("quest_id", questId)
-    .in("type", ["quest_completed", "completion_retracted"])
+    .in("type", ["quest_completed", "claim_verified", "completion_retracted"])
     .order("occurred_at", { ascending: true });
   if (logError) return { ok: false, error: logError.message };
 
@@ -311,18 +305,29 @@ export async function undoCompletion(
     localDayStart(new Date(), clampTz(tzOffsetMinutes)).getTime(),
     Date.now() - 86_400_000,
   );
+  // A milestone claim is a solemn statement, so it gets a MISCLICK WINDOW
+  // rather than open-ended undo: today only, same as a daily. Beyond that
+  // it is history, and the only exit is claim_retracted — the honest
+  // admission, which grants Integrity and refunds nothing. Before this
+  // there was no exit at all, which made a mis-tap permanent; a trap is
+  // not the same thing as a principle.
+  const windowed = isDaily || quest.weighty;
   const target = (rows ?? [])
     .reverse()
     .find(
       (r) =>
-        r.type === "quest_completed" &&
+        (r.type === "quest_completed" || r.type === "claim_verified") &&
         !alreadyRetracted.has(r.id) &&
-        (!isDaily || new Date(r.occurred_at).getTime() >= boundaryMs),
+        (!windowed || new Date(r.occurred_at).getTime() >= boundaryMs),
     );
   if (!target) {
     return {
       ok: false,
-      error: isDaily ? "Nothing done today to undo." : "No completion on record to undo.",
+      error: quest.weighty
+        ? "Claimed before today. It stands — retract it at the seasonal audit."
+        : isDaily
+          ? "Nothing done today to undo."
+          : "No completion on record to undo.",
     };
   }
 

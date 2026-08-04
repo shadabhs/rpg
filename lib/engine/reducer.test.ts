@@ -304,7 +304,13 @@ describe("completion_retracted — the misclick undo", () => {
     expect(state.lastActiveAt).toBeNull();
   });
 
-  it("cannot void a claim_verified — verified claims exit only via the audit", () => {
+  // DESIGN CHANGE (deliberate): a retraction now voids a claim_verified
+  // too. Previously a mis-tapped milestone was permanent, because the
+  // seasonal audit that was supposed to be its exit does not exist yet —
+  // a trap, not a principle. The MISCLICK WINDOW lives in the action
+  // layer (same local day only); the engine simply honours the
+  // retraction. This is covenant-safe because voiding only ever REMOVES.
+  it("voids a claim_verified when retracted, refunding exactly what it granted", () => {
     const claim: SystemEvent = {
       type: "claim_verified",
       id: "m1",
@@ -313,16 +319,50 @@ describe("completion_retracted — the misclick undo", () => {
       difficulty: "SEVERE",
       evidence: "shipped v1",
     };
-    const state = reduce([
+    const withClaim = reduce([claim]);
+    expect(withClaim.totalXp).toBe(XP_BY_DIFFICULTY.SEVERE);
+
+    const voided = reduce([
       claim,
       {
         type: "completion_retracted",
         id: "u1",
-        timestamp: iso(1),
+        timestamp: iso(0),
         retractsEventId: "m1",
       },
     ]);
-    expect(state.totalXp).toBe(XP_BY_DIFFICULTY.SEVERE);
+    expect(voided.totalXp).toBe(0);
+    expect(voided.domainsRaw.craft).toBe(0);
+    expect(voided.integrity).toBe(INTEGRITY_BASELINE);
+  });
+
+  it("a retraction can never be a net gain, for either event type", () => {
+    // The property that makes the misclick window covenant-safe.
+    const events: SystemEvent[] = [
+      completed("q1", 0, "vitality", "HARD"),
+      {
+        type: "claim_verified",
+        id: "m1",
+        timestamp: iso(0),
+        domain: "craft",
+        difficulty: "SEVERE",
+        evidence: "x",
+      },
+    ];
+    const full = reduce(events);
+    for (const targetId of ["q1", "m1"]) {
+      const after = reduce([
+        ...events,
+        {
+          type: "completion_retracted",
+          id: `u-${targetId}`,
+          timestamp: iso(0),
+          retractsEventId: targetId,
+        },
+      ]);
+      expect(after.totalXp).toBeLessThan(full.totalXp);
+      expect(after.integrity).toBe(full.integrity);
+    }
   });
 });
 

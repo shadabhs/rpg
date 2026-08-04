@@ -172,7 +172,17 @@ export function reduce(
 
   for (const ev of sorted) {
     if (ev.type === "progress_reset") continue; // boundary only, grants nothing
-    if (ev.type === "quest_completed" && voided.has(ev.id)) continue;
+    // A retraction voids the event it names — a mis-tapped completion OR a
+    // mis-tapped milestone claim. The action layer restricts claims to a
+    // same-day misclick window; older claims exit only through
+    // claim_retracted (the honest admission, which refunds nothing).
+    // Voiding can never GAIN anything, so this is covenant-safe.
+    if (
+      (ev.type === "quest_completed" || ev.type === "claim_verified") &&
+      voided.has(ev.id)
+    ) {
+      continue;
+    }
     // completion_retracted itself grants nothing and does not count as
     // activity — undoing a misclick is not real-world action, so it never
     // touches lastActiveAt/decay. Its entire effect is the skip above.
