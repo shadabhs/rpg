@@ -69,6 +69,23 @@ export function localDayStart(now: Date, tzOffsetMinutes: number): Date {
 const dayNumber = (key: string) => Date.parse(key) / 86_400_000;
 
 /**
+ * Everything after the most recent `progress_reset`, which acts as a
+ * replay boundary rather than a deletion. Exported because every derived
+ * view — the character, the Chronicle, the Ledger, the day/week reports —
+ * must agree on where the current life begins.
+ */
+export function eventsSinceReset(events: SystemEvent[]): SystemEvent[] {
+  let boundary = -Infinity;
+  for (const e of events) {
+    if (e.type === "progress_reset") {
+      boundary = Math.max(boundary, new Date(e.timestamp).getTime());
+    }
+  }
+  if (boundary === -Infinity) return events;
+  return events.filter((e) => new Date(e.timestamp).getTime() > boundary);
+}
+
+/**
  * ISO 8601 week key, e.g. "2026-W05", shifted into the player's local time
  * so the weekly cap resets on THEIR Monday. Bucketing this in UTC while
  * every other boundary was local let a player west of UTC bank two weeks'
@@ -119,7 +136,9 @@ export function reduce(
   now: Date = new Date(),
   tzOffsetMinutes: number = 0,
 ): CharacterState {
-  const sorted = [...events].sort(
+  // A reset is a replay boundary, not a deletion — see eventsSinceReset.
+  const live = eventsSinceReset(events);
+  const sorted = [...live].sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
   );
 
@@ -130,7 +149,7 @@ export function reduce(
   // bookkeeping, not an honesty event. Only quest_completed is voidable;
   // a retraction pointing at any other event type has no effect.
   const voided = new Set(
-    events
+    live
       .filter((e) => e.type === "completion_retracted")
       .map((e) => e.retractsEventId),
   );
@@ -152,6 +171,7 @@ export function reduce(
   const declinedQuests = new Set<string>();
 
   for (const ev of sorted) {
+    if (ev.type === "progress_reset") continue; // boundary only, grants nothing
     if (ev.type === "quest_completed" && voided.has(ev.id)) continue;
     // completion_retracted itself grants nothing and does not count as
     // activity — undoing a misclick is not real-world action, so it never

@@ -57,6 +57,19 @@ export type SystemEvent =
       retractsEventId: string;
     }
   | {
+      /**
+       * A deliberate, confirmed wipe of progress. The log is append-only —
+       * `event_log` has no DELETE policy for anyone, which is what makes the
+       * audit trail provable — so a reset cannot erase. It is a BOUNDARY:
+       * `reduce()` replays only events after the most recent one, so the
+       * character genuinely starts over while the history behind it stays
+       * on record and auditable.
+       */
+      type: "progress_reset";
+      id: string;
+      timestamp: string;
+    }
+  | {
       /** The misclick undo: reverses a prior quest_completed. The reducer
        *  voids the referenced event entirely — XP, domain gain and
        *  weekly-cap usage all replay as if the tap never happened. Grants

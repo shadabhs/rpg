@@ -985,6 +985,73 @@ describe("regressions found by adversarial review — these must never come back
   });
 });
 
+describe("progress_reset — a replay boundary, never a deletion", () => {
+  const before: SystemEvent[] = [
+    completed("a", 0, "vitality", "SEVERE"),
+    completed("b", 1, "craft", "HARD"),
+    { type: "claim_declined", id: "d1", timestamp: iso(1), questId: "m1" },
+  ];
+  const reset: SystemEvent = { type: "progress_reset", id: "r1", timestamp: iso(2) };
+
+  it("returns the character to a Level 1 blank slate", () => {
+    const state = reduce([...before, reset], new Date(iso(2)));
+    expect(state.totalXp).toBe(0);
+    expect(state.level).toBe(1);
+    expect(state.gold).toBe(0);
+    expect(state.integrity).toBe(INTEGRITY_BASELINE);
+    expect(state.domainsRaw.vitality).toBe(0);
+    expect(state.lastActiveAt).toBeNull();
+  });
+
+  it("keeps counting normally after the boundary", () => {
+    const state = reduce(
+      [...before, reset, completed("c", 3, "mind", "STANDARD")],
+      new Date(iso(3)),
+    );
+    expect(state.totalXp).toBe(XP_BY_DIFFICULTY.STANDARD);
+    expect(state.domainsRaw.mind).toBe(domainGainFromXp(XP_BY_DIFFICULTY.STANDARD));
+    expect(state.domainsRaw.vitality).toBe(0);
+  });
+
+  it("does not erase history — the events are still in the log", () => {
+    // The point of a boundary over a delete: event_log has no DELETE
+    // policy, and the audit trail must survive a reset.
+    const all = [...before, reset];
+    expect(all.filter((e) => e.type === "quest_completed")).toHaveLength(2);
+  });
+
+  it("clears the Chronicle, Ledger and reports to match the character", () => {
+    const all = [...before, reset];
+    expect(chronicleEntries(all, {}, 0)).toHaveLength(0);
+    expect(buildLedger(all, 0)).toEqual({
+      daysActive: 0,
+      questsCompleted: 0,
+      milestonesClaimed: 0,
+      timesHeldBack: 0,
+    });
+    expect(buildWeekReport(all, new Date(iso(2)), 0).thisWeek).toBe(0);
+    expect(buildDayReport(all, new Date(iso(2)), 0).xpToday).toBe(0);
+  });
+
+  it("honours only the MOST RECENT reset", () => {
+    const events: SystemEvent[] = [
+      completed("a", 0, "vitality", "SEVERE"),
+      { type: "progress_reset", id: "r1", timestamp: iso(1) },
+      completed("b", 2, "craft", "HARD"),
+      { type: "progress_reset", id: "r2", timestamp: iso(3) },
+      completed("c", 4, "mind", "TRIVIAL"),
+    ];
+    expect(reduce(events, new Date(iso(4))).totalXp).toBe(XP_BY_DIFFICULTY.TRIVIAL);
+  });
+
+  it("grants nothing by itself and does not count as activity", () => {
+    const state = reduce([reset], new Date(iso(2)));
+    expect(state.totalXp).toBe(0);
+    expect(state.integrity).toBe(INTEGRITY_BASELINE);
+    expect(state.lastActiveAt).toBeNull();
+  });
+});
+
 describe("the AI boundary is structurally enforced, not just documented", () => {
   const forbidden = [
     "fetch(",

@@ -1,5 +1,5 @@
 import type { SystemEvent } from "./events";
-import { localDayKey, localDayStart, reduce } from "./reducer";
+import { localDayKey, localDayStart, reduce, eventsSinceReset } from "./reducer";
 import {
   INTEGRITY_GAIN_ON_DECLINE,
   INTEGRITY_GAIN_ON_RETRACT,
@@ -46,10 +46,12 @@ const voidedIds = (events: SystemEvent[]) =>
  * constants from rules.ts, so those are safe to state.
  */
 export function chronicleEntries(
-  events: SystemEvent[],
+  allEvents: SystemEvent[],
   questTitleById: Record<string, string>,
   tzOffsetMinutes: number,
 ): ChronicleEntry[] {
+  // Every derived view begins at the same place: after the last reset.
+  const events = eventsSinceReset(allEvents);
   const voided = voidedIds(events);
   const titleOf = (questId?: string) =>
     (questId && questTitleById[questId]) || "a quest";
@@ -129,9 +131,10 @@ export type Ledger = {
  * these are the truth. Every number is a count of witnessed events.
  */
 export function buildLedger(
-  events: SystemEvent[],
+  allEvents: SystemEvent[],
   tzOffsetMinutes: number,
 ): Ledger {
+  const events = eventsSinceReset(allEvents);
   const voided = voidedIds(events);
   const days = new Set<string>();
   let questsCompleted = 0;
@@ -167,10 +170,11 @@ export type DayReport = {
 
 /** What today amounted to. Powers the close-out ritual. */
 export function buildDayReport(
-  events: SystemEvent[],
+  allEvents: SystemEvent[],
   now: Date,
   tzOffsetMinutes: number,
 ): DayReport {
+  const events = eventsSinceReset(allEvents);
   const dayStartMs = localDayStart(now, tzOffsetMinutes).getTime();
   // The baseline keeps everything from before today PLUS today's
   // retractions. Without the retractions, undoing a completion from an
@@ -223,10 +227,11 @@ function weekKey(isoOrDate: string | Date, tzOffsetMinutes: number): string {
 /** This week held against every week before it. The comparison is the
  *  System's entire opinion — no praise, just the two numbers. */
 export function buildWeekReport(
-  events: SystemEvent[],
+  allEvents: SystemEvent[],
   now: Date,
   tzOffsetMinutes: number,
 ): WeekReport {
+  const events = eventsSinceReset(allEvents);
   const voided = voidedIds(events);
   const counts = new Map<string, number>();
   for (const ev of events) {

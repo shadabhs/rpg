@@ -205,6 +205,12 @@ export function PreviewHarness({ scenario }: { scenario: Scenario }) {
     createEpic: async () => ({ ...ok, id: `epic-${Math.random().toString(36).slice(2, 8)}` }),
     chooseTitle: async () => ok,
     setCharacterName: async () => ok,
+    // Enforces the same typed confirmation the real action does, so the
+    // harness exercises the refusal path too.
+    resetProgress: async (confirmation: string) =>
+      confirmation.trim().toUpperCase() === "RESET"
+        ? ok
+        : { ok: false as const, error: "Confirmation not given. Nothing was changed." },
     // No server to resync from — harness truth lives in the client.
     resync: () => {},
     // A deliberate failure path, driven by a magic title, so the harness

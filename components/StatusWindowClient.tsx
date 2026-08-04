@@ -10,8 +10,8 @@ import { VerificationScreen } from "@/components/VerificationScreen";
 import { LevelUpOverlay } from "@/components/LevelUpOverlay";
 import { TierUpOverlay } from "@/components/TierUpOverlay";
 import { RecordOverlay } from "@/components/RecordOverlay";
-import { initAudio, play, setMuted } from "@/lib/sound";
-import { useMuted, useTzOffsetMinutes } from "@/lib/hooks";
+import { initAudio, play } from "@/lib/sound";
+import { useTzOffsetMinutes } from "@/lib/hooks";
 import { buzz } from "@/lib/haptics";
 import { reduce } from "@/lib/engine/reducer";
 import { evaluateRequisites } from "@/lib/engine/requisites";
@@ -23,13 +23,14 @@ import { EpicsPanel } from "@/components/EpicsPanel";
 import { ChroniclePanel } from "@/components/ChroniclePanel";
 import { TitlesPanel } from "@/components/TitlesPanel";
 import { FirstRunRite } from "@/components/FirstRunRite";
+import { SystemPanel } from "@/components/SystemPanel";
+import { SystemNav, type View } from "@/components/SystemNav";
 import {
   chronicleEntries,
   buildLedger,
   buildDayReport,
   buildWeekReport,
 } from "@/lib/engine/chronicle";
-import { signOut } from "@/app/actions";
 import { useActions } from "@/components/ActionsContext";
 
 type Toast = { id: number; text: string; color: string };
@@ -60,7 +61,6 @@ export function StatusWindowClient({
   const [riteOpen, setRiteOpen] = useState(
     characterName === "SUBJECT" && initialEvents.length === 0,
   );
-  const muted = useMuted();
   const tz = useTzOffsetMinutes();
   const router = useRouter();
   const actions = useActions();
@@ -85,6 +85,10 @@ export function StatusWindowClient({
     previous: number;
   } | null>(null);
   const [fault, setFault] = useState<string | null>(null);
+  /** Which System module is open. Client-side rather than routed: one
+   *  fetch and one reduce() feed every view, so switching is instant and
+   *  the character can never differ between screens. */
+  const [view, setView] = useState<View>("today");
 
   const [seconds, setSeconds] = useState(0);
   const toastId = useRef(0);
@@ -488,40 +492,17 @@ export function StatusWindowClient({
     resync();
   }
 
-  function toggleMute() {
-    initAudio();
-    const next = !muted;
-    setMuted(next);
-    if (!next) play("panel");
-  }
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-md px-4 pt-4 pb-24">
       {/* ---------------- header ---------------- */}
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-baseline justify-between">
         <h1 className="font-sys text-[11px] tracking-[0.34em] text-sys">
           THE SYSTEM
         </h1>
-        <div className="flex items-center gap-3">
-          <span className="tnum font-sys text-[10px] text-ink-faint">
-            SESSION {seconds}s
-          </span>
-          <button
-            onClick={toggleMute}
-            aria-pressed={muted}
-            className="border border-edge px-2 py-1 font-sys text-[10px] tracking-[0.16em] text-ink-dim transition-colors hover:border-sys/60 hover:text-sys"
-          >
-            {muted ? "SOUND OFF" : "SOUND ON"}
-          </button>
-          <form action={signOut}>
-            <button
-              type="submit"
-              className="border border-edge px-2 py-1 font-sys text-[10px] tracking-[0.16em] text-ink-dim transition-colors hover:border-rust/60 hover:text-rust"
-            >
-              SIGN OUT
-            </button>
-          </form>
-        </div>
+        <span className="tnum font-sys text-[10px] text-ink-faint">
+          SESSION {seconds}s
+        </span>
       </div>
 
       {fault && (
@@ -538,7 +519,9 @@ export function StatusWindowClient({
         </div>
       )}
 
-      {/* ---------------- status window ---------------- */}
+      {/* ================= STATUS ================= */}
+      {view === "status" && (
+      <>
       <Panel label="Status Window" delay={80}>
         <div className="flex items-center gap-3 p-4">
           <Avatar
@@ -622,7 +605,20 @@ export function StatusWindowClient({
         </div>
       </Panel>
 
-      {/* ---------------- today ---------------- */}
+      <TitlesPanel
+        state={state}
+        events={events}
+        currentTitle={wornTitle}
+        onTitleChosen={setWornTitle}
+        onRejected={rejected}
+        delay={360}
+      />
+      </>
+      )}
+
+      {/* ================= TODAY ================= */}
+      {view === "today" && (
+      <>
       <Panel
         label={`Today · ${outstanding.length} remaining`}
         delay={360}
@@ -747,24 +743,6 @@ export function StatusWindowClient({
         />
       </Panel>
 
-      <EpicsPanel
-        epics={epics}
-        quests={quests}
-        delay={440}
-        onCreated={(epic) => setEpics((es) => [...es, epic])}
-      />
-
-      <ChroniclePanel ledger={ledger} entries={chronicle} delay={520} />
-
-      <TitlesPanel
-        state={state}
-        events={events}
-        currentTitle={wornTitle}
-        onTitleChosen={setWornTitle}
-        onRejected={rejected}
-        delay={600}
-      />
-
       {/* ---------------- close-out ritual ---------------- */}
       {dayClosed && (
         <Panel label="Day closed" delay={120} className="mt-3" tone="gold">
@@ -794,6 +772,38 @@ export function StatusWindowClient({
             </p>
           </div>
         </Panel>
+      )}
+      </>
+      )}
+
+      {/* ================= CAMPAIGN ================= */}
+      {view === "campaign" && (
+        <EpicsPanel
+          epics={epics}
+          quests={quests}
+          delay={80}
+          onCreated={(epic) => setEpics((es) => [...es, epic])}
+        />
+      )}
+
+      {/* ================= RECORD ================= */}
+      {view === "chronicle" && (
+        <ChroniclePanel ledger={ledger} entries={chronicle} delay={80} />
+      )}
+
+      {/* ================= SYSTEM ================= */}
+      {view === "system" && (
+        <SystemPanel
+          delay={80}
+          onRejected={rejected}
+          onReset={() => {
+            // The server appended the boundary event; pull the fresh,
+            // empty state rather than guessing at it locally.
+            toast("[ RESET ] The record begins again.", "var(--color-sys)", 3000);
+            setView("status");
+            resync();
+          }}
+        />
       )}
 
       <p className="mt-6 text-center font-sys text-[10px] leading-relaxed text-ink-faint">
@@ -847,6 +857,8 @@ export function StatusWindowClient({
           onDone={() => setRecord(null)}
         />
       )}
+
+      <SystemNav view={view} onChange={setView} outstanding={outstanding.length} />
 
       {tierUp && (
         <TierUpOverlay

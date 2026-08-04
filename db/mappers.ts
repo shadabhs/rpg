@@ -89,6 +89,12 @@ export function rowToEvent(row: EventRow): SystemEvent {
         timestamp: row.occurred_at,
         retractsEventId: row.retracts_event_id ?? "",
       };
+    case "progress_reset":
+      return {
+        type: "progress_reset",
+        id: row.id,
+        timestamp: row.occurred_at,
+      };
     case "completion_retracted":
       return {
         type: "completion_retracted",

@@ -484,6 +484,53 @@ export async function createQuest(
   return { ok: true, id: data.id };
 }
 
+/**
+ * [ SYSTEM CONFIGURATION ] — wipe progress and begin again.
+ *
+ * Cannot and must not delete: `event_log` has no DELETE policy for any
+ * role, which is exactly what makes the honesty system's audit trail
+ * provable. Instead this appends a `progress_reset` event, which the
+ * reducer treats as a REPLAY BOUNDARY — the character starts over while
+ * the history behind it stays on record. Quests are archived rather than
+ * removed, for the same reason.
+ *
+ * Requires the literal string "RESET" from a deliberate, typed
+ * confirmation. Re-checked here because a client-side guard is a
+ * convenience, never a control.
+ */
+export async function resetProgress(confirmation: string): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+
+  if (confirmation.trim().toUpperCase() !== "RESET") {
+    return { ok: false, error: "Confirmation not given. Nothing was changed." };
+  }
+
+  const { error: insertError } = await supabase.from("event_log").insert({
+    user_id: user.id,
+    type: "progress_reset",
+    occurred_at: new Date().toISOString(),
+  });
+  if (insertError) return { ok: false, error: insertError.message };
+
+  // Archive every quest so the board is clear. `status` is one of the two
+  // columns the client role may update (db/policies.sql).
+  const { error: questError } = await supabase
+    .from("quests")
+    .update({ status: "archived" })
+    .eq("user_id", user.id)
+    .neq("status", "archived");
+  if (questError) return { ok: false, error: questError.message };
+
+  // Back to an unnamed subject, so the first-run rite greets you again.
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ character_name: "SUBJECT", title: "The Unproven" })
+    .eq("user_id", user.id);
+  if (profileError) return { ok: false, error: profileError.message };
+
+  return { ok: true };
+}
+
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
