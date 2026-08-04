@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -50,6 +51,10 @@ export const quests = pgTable(
     whereText: text("where_text").notNull(),
     weighty: boolean("weighty").notNull().default(false),
     grants: text("grants"),
+    /** 'once' quests flip to completed and leave the list; 'daily' quests
+     *  stay active forever — "done today" is derived from quest_completed
+     *  events, which is what makes streaks computable from the log alone. */
+    cadence: text("cadence").notNull().default("once"), // once | daily
     status: text("status").notNull().default("active"), // active | completed | archived
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -78,7 +83,13 @@ export const eventLog = pgTable(
     domain: text("domain"), // quest_completed / claim_verified only
     difficulty: text("difficulty"), // quest_completed / claim_verified only
     evidence: text("evidence"), // claim_verified only
-    retractsEventId: uuid("retracts_event_id"), // claim_retracted only
+    retractsEventId: uuid("retracts_event_id"), // claim_retracted / completion_retracted
+    questId: uuid("quest_id"), // quest_completed / claim_verified / completion_retracted
+    /** Loot RESULT, stored at insert time. The roll happens server-side in
+     *  the action (never in the reducer — the engine's static purity check
+     *  forbids randomness there); replay just sums what was rolled. */
+    gold: integer("gold"), // quest_completed only
+    item: text("item"), // quest_completed only, flavour drop
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

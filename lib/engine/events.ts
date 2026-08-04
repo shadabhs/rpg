@@ -15,6 +15,9 @@ export type SystemEvent =
       timestamp: string; // ISO 8601
       domain: DomainKey;
       difficulty: Difficulty;
+      /** Which quest this completion belongs to. Optional because events
+       *  written before the quest_id column existed don't carry it. */
+      questId?: string;
     }
   | {
       /** A milestone/epic claim confirmed via the Verification Screen. */
@@ -35,6 +38,20 @@ export type SystemEvent =
       /** A prior claim_verified retracted during a seasonal self-audit.
        *  Grants Integrity and refunds nothing. */
       type: "claim_retracted";
+      id: string;
+      timestamp: string;
+      retractsEventId: string;
+    }
+  | {
+      /** The misclick undo: reverses a prior quest_completed. The reducer
+       *  voids the referenced event entirely — XP, domain gain and
+       *  weekly-cap usage all replay as if the tap never happened. Grants
+       *  nothing, costs nothing beyond the refund; there is no Integrity
+       *  angle because a misclick is not a claim. Deliberately distinct
+       *  from claim_retracted, the honesty admission that refunds nothing.
+       *  Only quest_completed events are voidable — verified claims exit
+       *  through the seasonal audit, never through undo. */
+      type: "completion_retracted";
       id: string;
       timestamp: string;
       retractsEventId: string;

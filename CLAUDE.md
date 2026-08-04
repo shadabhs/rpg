@@ -51,10 +51,13 @@ This is the one part of the app the AI boundary applies to literally: nothing
 here may depend on network I/O, randomness, or an LLM, and `reducer.test.ts`
 statically greps `reducer.ts`/`rules.ts` for exactly that on every test run.
 
-- **`events.ts`** — `SystemEvent`, a closed union of four shapes
-  (`quest_completed`, `claim_verified`, `claim_declined`, `claim_retracted`).
-  This is the append-only log — never store a computed total, store what
-  happened.
+- **`events.ts`** — `SystemEvent`, a closed union of five shapes
+  (`quest_completed`, `claim_verified`, `claim_declined`, `claim_retracted`,
+  `completion_retracted`). This is the append-only log — never store a
+  computed total, store what happened. `completion_retracted` is the misclick
+  undo: the reducer voids the referenced `quest_completed` entirely (XP,
+  domain gain and weekly-cap usage all replay as if the tap never happened),
+  whereas `claim_retracted` is an honesty admission that refunds nothing.
 - **`reducer.ts`** — `reduce(events, now)` is a pure function that replays the
   log into a `CharacterState` (level, XP, Integrity, domains, tier). The
   **same function runs on the client and the server**: the client appends an
@@ -85,10 +88,15 @@ statically greps `reducer.ts`/`rules.ts` for exactly that on every test run.
   failure, it reverts the optimistic event by id and surfaces
   `[ REJECTED ] <reason>` via the same toast mechanism used for XP gains.
 - **`app/actions.ts`** — the entire write surface for progression
-  (`completeQuest`, `verifyClaim`, `declineClaim`, `createQuest`, `signOut`).
+  (`completeQuest`, `undoCompletion`, `verifyClaim`, `declineClaim`,
+  `createQuest`, `signOut`).
   Every action re-derives the acting user from the session server-side; never
   trusts a client-supplied `user_id`. `completeQuest` explicitly refuses
   `weighty` quests — those must go through `verifyClaim`/`declineClaim`.
+  `undoCompletion` (the misclick undo) never deletes — it appends a
+  `completion_retracted` event that the reducer voids the original against,
+  and it refuses weighty quests: a verified claim exits only via
+  `claim_retracted` at the seasonal audit, which refunds nothing.
 - **`proxy.ts`** — refreshes the Supabase session on every request and gates
   everything except `/login` and `/auth/*`. Named `proxy.ts`/`proxy()`, not
   `middleware.ts`/`middleware()` — Next.js 16 renamed the convention, and a

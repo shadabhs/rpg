@@ -40,7 +40,9 @@ export default async function StatusWindowPage() {
 
   const { data: eventRows } = await supabase
     .from("event_log")
-    .select("id, type, domain, difficulty, evidence, retracts_event_id, occurred_at")
+    .select(
+      "id, type, domain, difficulty, evidence, retracts_event_id, quest_id, occurred_at",
+    )
     .eq("user_id", user.id);
 
   const events = ((eventRows ?? []) as EventRow[]).map(rowToEvent);

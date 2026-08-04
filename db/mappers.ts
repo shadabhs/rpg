@@ -36,6 +36,7 @@ export type EventRow = {
   difficulty: string | null;
   evidence: string | null;
   retracts_event_id: string | null;
+  quest_id: string | null;
   occurred_at: string;
 };
 
@@ -48,6 +49,7 @@ export function rowToEvent(row: EventRow): SystemEvent {
         timestamp: row.occurred_at,
         domain: row.domain as DomainKey,
         difficulty: row.difficulty as Difficulty,
+        questId: row.quest_id ?? undefined,
       };
     case "claim_verified":
       return {
@@ -63,6 +65,13 @@ export function rowToEvent(row: EventRow): SystemEvent {
     case "claim_retracted":
       return {
         type: "claim_retracted",
+        id: row.id,
+        timestamp: row.occurred_at,
+        retractsEventId: row.retracts_event_id ?? "",
+      };
+    case "completion_retracted":
+      return {
+        type: "completion_retracted",
         id: row.id,
         timestamp: row.occurred_at,
         retractsEventId: row.retracts_event_id ?? "",

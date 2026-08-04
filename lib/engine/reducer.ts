@@ -74,6 +74,18 @@ export function reduce(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
   );
 
+  // Undone completions are voided entirely: skipped during replay, so their
+  // XP, domain gain AND weekly-cap usage unwind to exactly the state that
+  // would exist had the tap never happened. Contrast with claim_retracted,
+  // which refunds nothing — a misclick is not a claim, so reversing one is
+  // bookkeeping, not an honesty event. Only quest_completed is voidable;
+  // a retraction pointing at any other event type has no effect.
+  const voided = new Set(
+    events
+      .filter((e) => e.type === "completion_retracted")
+      .map((e) => e.retractsEventId),
+  );
+
   const domainsRaw = Object.fromEntries(
     DOMAIN_KEYS.map((k) => [k, 0]),
   ) as Record<DomainKey, number>;
@@ -85,6 +97,12 @@ export function reduce(
   const weeklyUsed = new Map<string, number>();
 
   for (const ev of sorted) {
+    if (ev.type === "quest_completed" && voided.has(ev.id)) continue;
+    // completion_retracted itself grants nothing and does not count as
+    // activity — undoing a misclick is not real-world action, so it never
+    // touches lastActiveAt/decay. Its entire effect is the skip above.
+    if (ev.type === "completion_retracted") continue;
+
     if (ev.type === "quest_completed" || ev.type === "claim_verified") {
       const nominal = XP_BY_DIFFICULTY[ev.difficulty];
       const week = isoWeekKey(new Date(ev.timestamp));

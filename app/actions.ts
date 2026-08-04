@@ -51,6 +51,7 @@ export async function completeQuest(questId: string): Promise<ActionResult> {
     type: "quest_completed",
     domain: quest.domain,
     difficulty: quest.difficulty,
+    quest_id: quest.id,
     occurred_at: now,
   });
   if (insertError) return { ok: false, error: insertError.message };
@@ -90,6 +91,7 @@ export async function verifyClaim(
     domain: quest.domain,
     difficulty: quest.difficulty,
     evidence,
+    quest_id: quest.id,
     occurred_at: now,
   });
   if (insertError) return { ok: false, error: insertError.message };
@@ -127,6 +129,77 @@ export async function declineClaim(questId: string): Promise<ActionResult> {
     occurred_at: new Date().toISOString(),
   });
   if (error) return { ok: false, error: error.message };
+
+  return { ok: true };
+}
+
+/**
+ * The misclick undo. Appends a completion_retracted event — history is
+ * never edited or deleted, the log stays append-only — and the reducer
+ * voids the referenced completion entirely, so XP, domain gain and
+ * weekly-cap usage all return to exactly what they'd be had the tap never
+ * happened. No covenant risk: undo only ever removes progress.
+ *
+ * Weighty quests are refused on purpose — a verified claim is an honesty
+ * event, and the only exit from one is claim_retracted at the seasonal
+ * audit, which refunds nothing.
+ */
+export async function undoCompletion(questId: string): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+
+  const { data: quest, error: fetchError } = await supabase
+    .from("quests")
+    .select("id, weighty, status")
+    .eq("id", questId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (fetchError || !quest) return { ok: false, error: "Quest not found." };
+  if (quest.weighty) {
+    return {
+      ok: false,
+      error: "Verified claims are retracted at the seasonal audit, not undone.",
+    };
+  }
+  if (quest.status !== "completed") return { ok: false, error: "Nothing to undo." };
+
+  // Latest completion for this quest that hasn't already been retracted.
+  // Resolved server-side from the log — the client's optimistic event ids
+  // never match the database's, so it can't be trusted to name the row.
+  const { data: rows, error: logError } = await supabase
+    .from("event_log")
+    .select("id, type, retracts_event_id, occurred_at")
+    .eq("user_id", user.id)
+    .eq("quest_id", questId)
+    .in("type", ["quest_completed", "completion_retracted"])
+    .order("occurred_at", { ascending: true });
+  if (logError) return { ok: false, error: logError.message };
+
+  const alreadyRetracted = new Set(
+    (rows ?? [])
+      .filter((r) => r.type === "completion_retracted")
+      .map((r) => r.retracts_event_id),
+  );
+  const target = (rows ?? [])
+    .reverse()
+    .find((r) => r.type === "quest_completed" && !alreadyRetracted.has(r.id));
+  if (!target) return { ok: false, error: "No completion on record to undo." };
+
+  const { error: insertError } = await supabase.from("event_log").insert({
+    user_id: user.id,
+    type: "completion_retracted",
+    retracts_event_id: target.id,
+    quest_id: questId,
+    occurred_at: new Date().toISOString(),
+  });
+  if (insertError) return { ok: false, error: insertError.message };
+
+  const { error: updateError } = await supabase
+    .from("quests")
+    .update({ status: "active", completed_at: null })
+    .eq("id", questId)
+    .eq("user_id", user.id);
+  if (updateError) return { ok: false, error: updateError.message };
 
   return { ok: true };
 }

@@ -18,6 +18,7 @@ import { XP_BY_DIFFICULTY, TIER_NAMES, type Difficulty } from "@/lib/engine/rule
 import type { QuestRow } from "@/db/mappers";
 import {
   completeQuest,
+  undoCompletion,
   verifyClaim,
   declineClaim,
   createQuest,
@@ -132,6 +133,7 @@ export function StatusWindowClient({
       timestamp: new Date().toISOString(),
       domain: quest.domain,
       difficulty: quest.difficulty,
+      questId: quest.id,
     });
 
     const gain = XP_BY_DIFFICULTY[quest.difficulty];
@@ -151,6 +153,54 @@ export function StatusWindowClient({
       revert(optimisticId);
       setQuests((qs) =>
         qs.map((q) => (q.id === quest.id ? { ...q, status: "active" } : q)),
+      );
+      toast(`[ REJECTED ] ${result.error}`, "var(--color-rust)");
+    }
+  }
+
+  async function handleUndo(quest: QuestRow) {
+    if (busy) return;
+    initAudio();
+
+    // Latest unretracted completion for this quest in local state. The
+    // server re-resolves this independently from the log — this id is only
+    // for the optimistic reduce(), and may be a client-generated one.
+    const alreadyRetracted = new Set(
+      events
+        .filter((e) => e.type === "completion_retracted")
+        .map((e) => e.retractsEventId),
+    );
+    const target = [...events]
+      .reverse()
+      .find(
+        (e) =>
+          e.type === "quest_completed" &&
+          e.questId === quest.id &&
+          !alreadyRetracted.has(e.id),
+      );
+
+    const optimisticId = nextOptimisticId();
+    setQuests((qs) =>
+      qs.map((q) => (q.id === quest.id ? { ...q, status: "active" } : q)),
+    );
+    const { before, after } = optimisticAppend({
+      type: "completion_retracted",
+      id: optimisticId,
+      timestamp: new Date().toISOString(),
+      retractsEventId: target?.id ?? "",
+    });
+
+    play("deny");
+    buzz("tap");
+    toast(`[ RETRACTED ] −${before.totalXp - after.totalXp} XP`, "var(--color-rust)");
+
+    setBusy(quest.id);
+    const result = await undoCompletion(quest.id);
+    setBusy(null);
+    if (!result.ok) {
+      revert(optimisticId);
+      setQuests((qs) =>
+        qs.map((q) => (q.id === quest.id ? { ...q, status: "completed" } : q)),
       );
       toast(`[ REJECTED ] ${result.error}`, "var(--color-rust)");
     }
@@ -336,12 +386,15 @@ export function StatusWindowClient({
               const domain = DOMAIN_DISPLAY[q.domain];
               const done = q.status !== "active";
               return (
-                <li key={q.id} className="border-b border-edge/40 last:border-b-0">
+                <li
+                  key={q.id}
+                  className="flex items-center border-b border-edge/40 last:border-b-0"
+                >
                   <button
                     onClick={() => handleQuestTap(q)}
                     disabled={done || busy === q.id}
                     data-testid={`quest-${q.id}`}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-sys/5 disabled:opacity-40"
+                    className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-sys/5 disabled:opacity-40"
                   >
                     <span
                       className="flex h-6 w-6 shrink-0 items-center justify-center border text-[11px]"
@@ -378,6 +431,19 @@ export function StatusWindowClient({
                       </span>
                     </span>
                   </button>
+
+                  {/* Misclick escape hatch. Never on weighty quests — a
+                      verified claim only exits via the seasonal audit. */}
+                  {done && !q.weighty && (
+                    <button
+                      onClick={() => handleUndo(q)}
+                      disabled={busy === q.id}
+                      data-testid={`undo-${q.id}`}
+                      className="mr-4 shrink-0 border border-edge px-2 py-1 font-sys text-[10px] tracking-[0.14em] text-ink-faint transition-colors hover:border-rust/60 hover:text-rust disabled:opacity-40"
+                    >
+                      UNDO
+                    </button>
+                  )}
                 </li>
               );
             })}

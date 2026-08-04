@@ -215,6 +215,109 @@ describe("reduce — the progression engine", () => {
   });
 });
 
+describe("completion_retracted — the misclick undo", () => {
+  it("voids the completion entirely — XP and domain gain return to exactly zero", () => {
+    const state = reduce([
+      completed("q1", 0, "vitality", "STANDARD"),
+      {
+        type: "completion_retracted",
+        id: "u1",
+        timestamp: iso(0),
+        retractsEventId: "q1",
+      },
+    ]);
+    expect(state.totalXp).toBe(0);
+    expect(state.domainsRaw.vitality).toBe(0);
+    expect(state.level).toBe(1);
+  });
+
+  it("is an exact inverse mid-history, not just at the end", () => {
+    const others: SystemEvent[] = [
+      completed("a", 0, "mind", "HARD"),
+      completed("b", 1, "craft", "SEVERE"),
+      completed("c", 2, "vitality", "TRIVIAL"),
+    ];
+    const without = reduce(others);
+    const withUndone = reduce([
+      others[0],
+      completed("oops", 1, "bonds", "SEVERE"),
+      ...others.slice(1),
+      {
+        type: "completion_retracted",
+        id: "u1",
+        timestamp: iso(3),
+        retractsEventId: "oops",
+      },
+    ]);
+    expect(withUndone.totalXp).toBe(without.totalXp);
+    expect(withUndone.domainsRaw).toEqual(without.domainsRaw);
+  });
+
+  it("replays weekly-cap accounting — undoing a capped week frees headroom", () => {
+    // Six SEVERE completions hit the cap exactly; a HARD after them counts
+    // only against what's left. Undoing one SEVERE must free 250 of cap so
+    // the HARD's full value replays — patching totals instead of voiding
+    // the event during replay would get this wrong.
+    const severes: SystemEvent[] = Array.from({ length: 6 }, (_, i) =>
+      completed(`s${i}`, 0, "craft", "SEVERE"),
+    );
+    const hard = completed("h1", 1, "craft", "HARD");
+    const capped = reduce([...severes, hard]);
+    expect(capped.totalXp).toBe(WEEKLY_XP_CAP);
+
+    const afterUndo = reduce([
+      ...severes,
+      hard,
+      {
+        type: "completion_retracted",
+        id: "u1",
+        timestamp: iso(2),
+        retractsEventId: "s0",
+      },
+    ]);
+    expect(afterUndo.totalXp).toBe(
+      5 * XP_BY_DIFFICULTY.SEVERE + XP_BY_DIFFICULTY.HARD,
+    );
+  });
+
+  it("grants nothing itself — no Integrity, no XP, no activity", () => {
+    const state = reduce([
+      completed("q1", 0, "vitality", "STANDARD"),
+      {
+        type: "completion_retracted",
+        id: "u1",
+        timestamp: iso(0),
+        retractsEventId: "q1",
+      },
+    ]);
+    expect(state.integrity).toBe(INTEGRITY_BASELINE);
+    // The voided completion no longer counts as activity either — an
+    // undone tap never happened, so it can't anchor the decay clock.
+    expect(state.lastActiveAt).toBeNull();
+  });
+
+  it("cannot void a claim_verified — verified claims exit only via the audit", () => {
+    const claim: SystemEvent = {
+      type: "claim_verified",
+      id: "m1",
+      timestamp: iso(0),
+      domain: "craft",
+      difficulty: "SEVERE",
+      evidence: "shipped v1",
+    };
+    const state = reduce([
+      claim,
+      {
+        type: "completion_retracted",
+        id: "u1",
+        timestamp: iso(1),
+        retractsEventId: "m1",
+      },
+    ]);
+    expect(state.totalXp).toBe(XP_BY_DIFFICULTY.SEVERE);
+  });
+});
+
 describe("tierForState — the Tier V honesty gate, tested directly", () => {
   it("caps at Tier IV when level qualifies for V but Integrity does not", () => {
     expect(tierForState(50, INTEGRITY_BASELINE)).toBe(4);
