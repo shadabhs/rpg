@@ -5,7 +5,7 @@ import { Panel } from "@/components/Panel";
 import { TITLE_DEFS, DEFAULT_TITLE } from "@/lib/engine/titles";
 import type { CharacterState } from "@/lib/engine/reducer";
 import type { SystemEvent } from "@/lib/engine/events";
-import { chooseTitle } from "@/app/actions";
+import { useActions } from "@/components/ActionsContext";
 import { initAudio, play } from "@/lib/sound";
 
 /**
@@ -29,6 +29,7 @@ export function TitlesPanel({
   onRejected: (error: string) => void;
   delay?: number;
 }) {
+  const { chooseTitle } = useActions();
   const [busy, setBusy] = useState(false);
   const earned = TITLE_DEFS.filter((t) => t.earned(state, events));
   const earnedNames = new Set(earned.map((t) => t.name));

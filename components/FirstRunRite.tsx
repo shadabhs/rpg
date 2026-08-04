@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { setCharacterName } from "@/app/actions";
+import { useActions } from "@/components/ActionsContext";
 import { initAudio, play } from "@/lib/sound";
 import { buzz } from "@/lib/haptics";
 
@@ -20,6 +20,7 @@ export function FirstRunRite({
   onNamed: (name: string) => void;
   onDone: () => void;
 }) {
+  const { setCharacterName } = useActions();
   const [step, setStep] = useState<"name" | "oath" | "statement">("name");
   const [name, setName] = useState("");
   const [error, setError] = useState("");

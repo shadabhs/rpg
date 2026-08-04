@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Panel } from "@/components/Panel";
 import { DOMAIN_KEYS, DOMAIN_DISPLAY, type DomainKey } from "@/lib/engine/domains";
 import type { EpicRow, QuestRow } from "@/db/mappers";
-import { createEpic } from "@/app/actions";
+import { useActions } from "@/components/ActionsContext";
 
 /**
  * The campaign layer. An epic is a named long-term goal; its milestones
@@ -121,6 +121,7 @@ function NewEpicForm({
   onOpenChange: (open: boolean) => void;
   onCreated: (epic: EpicRow) => void;
 }) {
+  const { createEpic } = useActions();
   const [title, setTitle] = useState("");
   const [intent, setIntent] = useState("");
   const [domain, setDomain] = useState<DomainKey>("craft");

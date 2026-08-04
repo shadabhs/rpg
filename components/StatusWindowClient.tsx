@@ -27,14 +27,8 @@ import {
   buildDayReport,
   buildWeekReport,
 } from "@/lib/engine/chronicle";
-import {
-  completeQuest,
-  undoCompletion,
-  verifyClaim,
-  declineClaim,
-  createQuest,
-  signOut,
-} from "@/app/actions";
+import { signOut } from "@/app/actions";
+import { useActions } from "@/components/ActionsContext";
 
 type Toast = { id: number; text: string; color: string };
 
@@ -66,6 +60,8 @@ export function StatusWindowClient({
   );
   const muted = useMuted();
   const tz = useTzOffsetMinutes();
+  const { completeQuest, undoCompletion, verifyClaim, declineClaim } =
+    useActions();
 
   const [verifying, setVerifying] = useState<QuestRow | null>(null);
   const [levelUp, setLevelUp] = useState<{ from: number; to: number } | null>(null);
@@ -751,6 +747,7 @@ function NewQuestForm({
   epics: EpicRow[];
   onCreated: (quest: QuestRow) => void;
 }) {
+  const { createQuest } = useActions();
   const [epicId, setEpicId] = useState("");
   const [title, setTitle] = useState("");
   const [domain, setDomain] = useState<DomainKey>("vitality");

@@ -4,6 +4,15 @@ import { createServerClient } from "@supabase/ssr";
 const PUBLIC_PATHS = ["/login", "/auth"];
 
 /**
+ * The UI QA harness at /preview is public ONLY when the server is
+ * explicitly started with PREVIEW_MODE=1. Production never sets it, so
+ * the path stays behind the auth gate there — and app/preview/page.tsx
+ * independently 404s on the same condition, so neither check alone is
+ * load-bearing.
+ */
+const previewOpen = () => process.env.PREVIEW_MODE === "1";
+
+/**
  * Refreshes the Supabase session on every request and gates everything
  * except /login and /auth/* behind it. Held back from the earlier auth
  * commit on purpose — flipping this on before the login flow was proven
@@ -44,7 +53,9 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isPublic = PUBLIC_PATHS.some((p) => request.nextUrl.pathname.startsWith(p));
+  const isPublic =
+    PUBLIC_PATHS.some((p) => request.nextUrl.pathname.startsWith(p)) ||
+    (previewOpen() && request.nextUrl.pathname.startsWith("/preview"));
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
