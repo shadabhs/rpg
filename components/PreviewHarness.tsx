@@ -5,7 +5,18 @@ import { ActionsProvider, type ActionSet } from "@/components/ActionsContext";
 import { StatusWindowClient } from "@/components/StatusWindowClient";
 import type { SystemEvent } from "@/lib/engine/events";
 import type { QuestRow, EpicRow } from "@/db/mappers";
-import { rollLoot } from "@/lib/loot";
+import { GOLD_BY_DIFFICULTY, type Difficulty } from "@/lib/engine/rules";
+
+/**
+ * A harness-local stand-in for the server's loot roll. lib/loot.ts states
+ * "never call it from the client", and that holds even here — importing it
+ * would pull the real roll into a client bundle and set the wrong
+ * precedent for the one module where randomness lives.
+ */
+function stubLoot(difficulty: Difficulty): { gold: number; item: string | null } {
+  const { min, max } = GOLD_BY_DIFFICULTY[difficulty];
+  return { gold: Math.round((min + max) / 2), item: null };
+}
 
 /**
  * A driveable copy of the real Status Window backed by in-memory state
@@ -136,7 +147,7 @@ export function PreviewHarness({ scenario }: { scenario: Scenario }) {
       if (q.weighty) {
         return { ok: false, error: "Milestones require verification, not a tap." };
       }
-      const loot = rollLoot(q.difficulty);
+      const loot = stubLoot(q.difficulty);
       return { ...ok, gold: loot.gold, item: loot.item };
     },
     undoCompletion: async () => ok,

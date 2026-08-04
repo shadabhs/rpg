@@ -212,8 +212,16 @@ export function StatusWindowClient({
       questId: quest.id,
     });
 
-    const gain = XP_BY_DIFFICULTY[quest.difficulty];
-    toast(`+${gain} XP`, DOMAIN_DISPLAY[quest.domain].color);
+    // Report XP actually BANKED, not the quest's nominal value. At the
+    // weekly ceiling a completion banks nothing, and the close-out panel
+    // already says "0 XP banked" — a toast claiming "+250 XP" would be a
+    // confidently wrong number contradicted by the same screen.
+    const gain = after.totalXp - before.totalXp;
+    toast(
+      gain > 0 ? `+${gain} XP` : "[ CAPPED ] Weekly ceiling reached. 0 XP.",
+      gain > 0 ? DOMAIN_DISPLAY[quest.domain].color : "var(--color-rust)",
+      gain > 0 ? 1100 : 2600,
+    );
 
     // The System reports reality, it never congratulates. A record line
     // states the fact and the number it beat — nothing more.
@@ -348,7 +356,7 @@ export function StatusWindowClient({
       setTimeout(() => setLevelUp({ from: before.level, to: after.level }), 420);
     }
 
-    const result = await verifyClaim(quest.id, evidence);
+    const result = await verifyClaim(quest.id, evidence, tz);
     if (!result.ok) {
       revert(optimisticId);
       setQuests((qs) =>
@@ -368,6 +376,7 @@ export function StatusWindowClient({
       type: "claim_declined",
       id: optimisticId,
       timestamp: new Date().toISOString(),
+      questId: quest.id,
     });
 
     play("deny");

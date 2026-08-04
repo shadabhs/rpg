@@ -32,8 +32,19 @@ const anyStreakAtLeast = (state: CharacterState, days: number) =>
  *  activity — the anti-shame title: coming back is witnessed, not the
  *  absence. */
 function returnedAfterAbsence(events: SystemEvent[], gapDays: number): boolean {
+  // An undone completion never happened, so it can neither bridge a gap
+  // nor manufacture one.
+  const voided = new Set(
+    events
+      .filter((e) => e.type === "completion_retracted")
+      .map((e) => e.retractsEventId),
+  );
   const active = events
-    .filter((e) => e.type === "quest_completed" || e.type === "claim_verified")
+    .filter(
+      (e) =>
+        (e.type === "quest_completed" && !voided.has(e.id)) ||
+        e.type === "claim_verified",
+    )
     .map((e) => new Date(e.timestamp).getTime())
     .sort((a, b) => a - b);
   for (let i = 1; i < active.length; i++) {

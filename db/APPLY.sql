@@ -66,7 +66,19 @@ do $$ begin
     using (user_id = auth.uid()) with check (user_id = auth.uid());
 exception when duplicate_object then null; end $$;
 
-grant select, insert, update on "epics" to authenticated;
+grant select, insert on "epics" to authenticated;
+grant update ("title", "intent", "status") on "epics" to authenticated;
+
+-- ---------- tighten the pre-existing table-wide UPDATE grants ----------
+-- Server Actions run with the user's own JWT, so RLS cannot distinguish
+-- app/actions.ts from a hand-rolled PATCH. A table-wide update grant let a
+-- client raise `difficulty` before completing, clear `weighty` to skip
+-- verification, or null `requisites`. Re-grant per column instead.
+revoke update on "quests" from authenticated;
+grant update ("status", "completed_at") on "quests" to authenticated;
+
+revoke update on "profiles" from authenticated;
+grant update ("character_name", "title") on "profiles" to authenticated;
 
 -- ---------- verify ----------
 -- Expect: cadence, epic_id, requisites on quests; quest_id, gold, item,

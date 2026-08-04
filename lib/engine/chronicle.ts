@@ -70,15 +70,22 @@ export function chronicleEntries(
           text: ev.item ? `${titleOf(ev.questId)} · ${ev.item}` : titleOf(ev.questId),
         });
         break;
-      case "claim_verified":
+      case "claim_verified": {
+        // An unprepared claim is stated plainly and without judgement —
+        // per DESIGN.md this record IS the only consequence of the honest
+        // override, so omitting it made the whole gate consequence-free.
+        const base_text = ev.evidence
+          ? `Milestone. Evidence: ${ev.evidence}`
+          : "Milestone.";
         entries.push({
           ...base,
           tag: "[CLAIMED]",
-          text: ev.evidence
-            ? `Milestone. Evidence: ${ev.evidence}`
-            : "Milestone.",
+          text: ev.unprepared
+            ? `${base_text} Preparation was not on file.`
+            : base_text,
         });
         break;
+      }
       case "claim_declined":
         entries.push({
           ...base,
@@ -165,8 +172,14 @@ export function buildDayReport(
   tzOffsetMinutes: number,
 ): DayReport {
   const dayStartMs = localDayStart(now, tzOffsetMinutes).getTime();
+  // The baseline keeps everything from before today PLUS today's
+  // retractions. Without the retractions, undoing a completion from an
+  // earlier day subtracted from the current replay but not the baseline,
+  // and the close-out reported a negative "XP banked today".
   const beforeToday = events.filter(
-    (e) => new Date(e.timestamp).getTime() < dayStartMs,
+    (e) =>
+      new Date(e.timestamp).getTime() < dayStartMs ||
+      e.type === "completion_retracted",
   );
   const xpToday =
     reduce(events, now, tzOffsetMinutes).totalXp -

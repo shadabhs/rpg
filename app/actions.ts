@@ -129,6 +129,7 @@ export async function completeQuest(
 export async function verifyClaim(
   questId: string,
   evidence: string,
+  tzOffsetMinutes: number = 0,
 ): Promise<ActionResult> {
   const { supabase, user } = await requireUser();
 
@@ -141,6 +142,14 @@ export async function verifyClaim(
 
   if (fetchError || !quest) return { ok: false, error: "Quest not found." };
   if (quest.status !== "active") return { ok: false, error: "Already resolved." };
+  // The mirror of completeQuest's weighty check. Without it this path was
+  // the weaker of the two: verifying a DAILY awarded XP again on a day it
+  // was already completed, bypassing the once-per-day guard entirely, and
+  // left the quest stuck in 'completed' where neither tap nor undo could
+  // reach it.
+  if (!quest.weighty) {
+    return { ok: false, error: "Only milestones are claimed. Tap this one." };
+  }
 
   const now = new Date().toISOString();
 
@@ -155,9 +164,11 @@ export async function verifyClaim(
       .eq("user_id", user.id);
     if (readError) return { ok: false, error: readError.message };
     const events = ((eventRows ?? []) as EventRow[]).map(rowToEvent);
+    // Same timezone the UI evaluated with, so a streak requisite the
+    // screen showed as met is never recorded as unprepared (or vice versa).
     unprepared = !evaluateRequisites(
       quest.requisites as Requisite[],
-      reduce(events),
+      reduce(events, new Date(), clampTz(tzOffsetMinutes)),
       events,
     ).met;
   }
@@ -194,16 +205,38 @@ export async function declineClaim(questId: string): Promise<ActionResult> {
 
   const { data: quest, error: fetchError } = await supabase
     .from("quests")
-    .select("id, status")
+    .select("id, status, weighty")
     .eq("id", questId)
     .eq("user_id", user.id)
     .single();
   if (fetchError || !quest) return { ok: false, error: "Quest not found." };
   if (quest.status !== "active") return { ok: false, error: "Already resolved." };
+  if (!quest.weighty) {
+    return { ok: false, error: "Only milestones are claimed." };
+  }
+
+  // One decline per quest. The quest stays active after NOT YET by design,
+  // so without this the honesty button itself was an unbounded Integrity
+  // faucet — ~20 seconds of tapping would clear the Tier V gate that
+  // exists to make fabricated progress visibly hollow. The reducer
+  // independently de-duplicates on replay; this just avoids writing the
+  // dead event.
+  const { data: priorDeclines, error: priorError } = await supabase
+    .from("event_log")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("type", "claim_declined")
+    .eq("quest_id", questId)
+    .limit(1);
+  if (priorError) return { ok: false, error: priorError.message };
+  if (priorDeclines && priorDeclines.length > 0) {
+    return { ok: false, error: "Already held back on this. Nothing further to record." };
+  }
 
   const { error } = await supabase.from("event_log").insert({
     user_id: user.id,
     type: "claim_declined",
+    quest_id: questId,
     occurred_at: new Date().toISOString(),
   });
   if (error) return { ok: false, error: error.message };
@@ -269,7 +302,15 @@ export async function undoCompletion(
       .filter((r) => r.type === "completion_retracted")
       .map((r) => r.retracts_event_id),
   );
-  const boundaryMs = localDayStart(new Date(), clampTz(tzOffsetMinutes)).getTime();
+  // The later of the local day start and 24h ago. The tz offset is
+  // client-supplied, and a hostile -840 would otherwise push the boundary
+  // ~22h earlier — silently rewriting a PREVIOUS day's streak history,
+  // which this restriction exists to prevent. A real local day start is
+  // never more than 24h back, so honest clients are unaffected.
+  const boundaryMs = Math.max(
+    localDayStart(new Date(), clampTz(tzOffsetMinutes)).getTime(),
+    Date.now() - 86_400_000,
+  );
   const target = (rows ?? [])
     .reverse()
     .find(

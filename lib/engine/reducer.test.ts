@@ -847,6 +847,144 @@ describe("requisites — preparation as an honest gate", () => {
   });
 });
 
+describe("regressions found by adversarial review — these must never come back", () => {
+  it("CRITICAL: a capped completion grants NO domain progress, so materials can't be farmed", () => {
+    // Fill the week's ceiling, then tap 200 TRIVIALs. Previously
+    // domainGainFromXp floored at 1, so each capped tap still added a
+    // domain point — the cap held for XP but not for the bars, and
+    // Requisite materials read the raw domain value.
+    const capped: SystemEvent[] = Array.from({ length: 6 }, (_, i) =>
+      completed(`s${i}`, 0, "vitality", "SEVERE"),
+    );
+    const atCap = reduce(capped);
+    expect(atCap.totalXp).toBe(WEEKLY_XP_CAP);
+
+    const farm: SystemEvent[] = Array.from({ length: 200 }, (_, i) =>
+      completed(`f${i}`, 0, "vitality", "TRIVIAL"),
+    );
+    const after = reduce([...capped, ...farm]);
+    expect(after.totalXp).toBe(WEEKLY_XP_CAP);
+    expect(after.domainsRaw.vitality).toBe(atCap.domainsRaw.vitality);
+
+    // ...and therefore the requisite gate stays shut.
+    expect(
+      evaluateRequisites(
+        [{ kind: "material", domain: "vitality", amount: 200 }],
+        after,
+        [...capped, ...farm],
+      ).met,
+    ).toBe(false);
+  });
+
+  it("a TRIVIAL quest is still worth a domain point when XP is actually banked", () => {
+    expect(domainGainFromXp(XP_BY_DIFFICULTY.TRIVIAL)).toBe(1);
+    expect(domainGainFromXp(0)).toBe(0);
+  });
+
+  it("MAJOR: NOT YET pays Integrity once per quest, not once per tap", () => {
+    const declines: SystemEvent[] = Array.from({ length: 30 }, (_, i) => ({
+      type: "claim_declined",
+      id: `d${i}`,
+      timestamp: iso(i),
+      questId: "m-same",
+    }));
+    expect(reduce(declines).integrity).toBe(
+      INTEGRITY_BASELINE + INTEGRITY_GAIN_ON_DECLINE,
+    );
+    // Distinct quests are distinct acts of honesty and still each count.
+    const twoQuests: SystemEvent[] = [
+      { type: "claim_declined", id: "a", timestamp: iso(0), questId: "m1" },
+      { type: "claim_declined", id: "b", timestamp: iso(1), questId: "m2" },
+    ];
+    expect(reduce(twoQuests).integrity).toBe(
+      INTEGRITY_BASELINE + 2 * INTEGRITY_GAIN_ON_DECLINE,
+    );
+  });
+
+  it("MAJOR: the weekly cap follows the player's local week, not UTC's", () => {
+    // A player at UTC-10. Both instants sit in ONE local week
+    // (Mon 5 Jan - Sun 11 Jan local), but the Sunday-night one lands in the
+    // NEXT ISO week once read in UTC, which is how the old UTC bucketing
+    // handed out two ceilings inside a single local week.
+    const mondayLocal = new Date(Date.UTC(2026, 0, 5, 22, 0, 0)).toISOString();
+    const sundayNightLocal = new Date(Date.UTC(2026, 0, 12, 9, 0, 0)).toISOString();
+    const mk = (id: string, ts: string): SystemEvent => ({
+      type: "quest_completed",
+      id,
+      timestamp: ts,
+      domain: "craft",
+      difficulty: "SEVERE",
+    });
+    const events = [
+      ...Array.from({ length: 6 }, (_, i) => mk(`a${i}`, mondayLocal)),
+      ...Array.from({ length: 6 }, (_, i) => mk(`b${i}`, sundayNightLocal)),
+    ];
+    // One local week, therefore exactly one ceiling.
+    expect(reduce(events, new Date(sundayNightLocal), -600).totalXp).toBe(
+      WEEKLY_XP_CAP,
+    );
+    // Read in UTC the same events straddle two weeks and pay two ceilings —
+    // the behaviour the fix removes for the player's own timezone.
+    expect(reduce(events, new Date(sundayNightLocal), 0).totalXp).toBe(
+      2 * WEEKLY_XP_CAP,
+    );
+  });
+
+  it("MINOR: undoing an earlier day's completion never reports negative XP today", () => {
+    const events: SystemEvent[] = [
+      completed("old", 0, "craft", "HARD"),
+      completed("today", 3, "craft", "STANDARD"),
+      {
+        type: "completion_retracted",
+        id: "u1",
+        timestamp: iso(3),
+        retractsEventId: "old",
+      },
+    ];
+    const report = buildDayReport(events, new Date(iso(3)), 0);
+    expect(report.xpToday).toBe(XP_BY_DIFFICULTY.STANDARD);
+    expect(report.xpToday).toBeGreaterThanOrEqual(0);
+    expect(report.completionsToday).toBe(1);
+  });
+
+  it("MINOR: an undone completion cannot bridge or manufacture an absence", () => {
+    const byKey = Object.fromEntries(TITLE_DEFS.map((t) => [t.key, t]));
+    // The mid-gap completion is undone, so a real 8-day absence remains.
+    const events: SystemEvent[] = [
+      completed("a", 0, "vitality", "STANDARD"),
+      completed("bridge", 4, "vitality", "STANDARD"),
+      completed("b", 8, "vitality", "STANDARD"),
+      {
+        type: "completion_retracted",
+        id: "u1",
+        timestamp: iso(4),
+        retractsEventId: "bridge",
+      },
+    ];
+    expect(byKey["returned"].earned(reduce(events), events)).toBe(true);
+  });
+
+  it("MINOR: an unprepared claim is stated plainly in the Chronicle", () => {
+    const entries = chronicleEntries(
+      [
+        {
+          type: "claim_verified",
+          id: "m1",
+          timestamp: iso(0),
+          domain: "vitality",
+          difficulty: "SEVERE",
+          evidence: "ran it",
+          questId: "m-half",
+          unprepared: true,
+        },
+      ],
+      {},
+      0,
+    );
+    expect(entries[0].text).toContain("Preparation was not on file");
+  });
+});
+
 describe("the AI boundary is structurally enforced, not just documented", () => {
   const forbidden = [
     "fetch(",

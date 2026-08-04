@@ -1,14 +1,29 @@
 # Database
 
-Schema: `db/schema.ts` (Drizzle). Migration: `db/migrations/0000_mysterious_ink.sql`.
+Schema: `db/schema.ts` (Drizzle). Migrations: `db/migrations/`.
 Row Level Security: `db/policies.sql`, applied separately — see below.
+
+## Already have a project? Run `db/APPLY.sql`
+
+**Nothing applies migrations automatically.** If the app reports a missing
+column — or a `[ FAULT ]` panel — the pending schema has not been run.
+`db/APPLY.sql` contains everything after `0000` (migrations `0001`–`0003` plus
+the `epics` RLS that drizzle-kit does not generate) as one idempotent paste,
+ending with queries that print what landed. Running it twice is safe.
+
+Verified against a real PostgreSQL 16 before shipping: clean apply, idempotent
+re-apply, correct ordering with `policies.sql`, `epics` isolation between two
+simulated users, and a proof that `event_log` stays append-only (the row's own
+owner is denied both `UPDATE` and `DELETE`).
 
 ## Applying to a fresh Supabase project
 
 1. Create the project at supabase.com (Task #7 in this repo's history —
    needs a human, can't be scripted from here).
 2. In the Supabase SQL Editor, run `db/migrations/0000_mysterious_ink.sql`,
-   then `db/policies.sql`, in that order.
+   then `db/APPLY.sql`, then `db/policies.sql`, in that order. (`policies.sql`
+   must come last: it adds a foreign key on `quests.epic_id` and policies on
+   `epics`, both of which need the columns/table that `APPLY.sql` creates.)
 3. Copy the project URL and anon key into `.env.local`:
    ```
    NEXT_PUBLIC_SUPABASE_URL=...

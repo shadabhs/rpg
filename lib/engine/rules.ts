@@ -47,9 +47,20 @@ export function xpCostForLevel(level: number): number {
   return Math.round(60 * Math.pow(level, 1.5));
 }
 
-/** Quest XP → domain stat gain. Matches the Phase 0 placeholder's formula,
- *  kept identical so nothing about the feel changes between phases. */
+/**
+ * Quest XP → domain stat gain.
+ *
+ * The zero case is load-bearing: once the weekly ceiling is spent, a
+ * completion banks 0 XP and must therefore grant 0 domain progress. An
+ * earlier version floored this at 1, which meant the cap held for XP but
+ * not for domain bars — and since Requisite materials read the raw domain
+ * value, trivial quests could be farmed past a gate while earning nothing.
+ * That is precisely the farming the covenant's weekly ceiling exists to
+ * prevent. The floor of 1 still applies to any real, uncapped award, so a
+ * TRIVIAL quest is never worth nothing.
+ */
 export function domainGainFromXp(xp: number): number {
+  if (xp <= 0) return 0;
   return Math.max(1, Math.round(xp / 20));
 }
 

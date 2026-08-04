@@ -107,6 +107,21 @@ create policy "event_log_insert_own"
 -- via an external migration tool, the grants are stated here so nothing
 -- depends on dashboard defaults. RLS still governs row-level access even
 -- though these grants are broad at the table level.
-grant select, insert, update on "profiles" to authenticated;
-grant select, insert, update, delete on "quests" to authenticated;
+-- UPDATE is granted PER COLUMN, not table-wide.
+--
+-- This is load-bearing. Server Actions run with the signed-in user's own
+-- JWT — the same credential the browser holds — so RLS alone cannot tell
+-- app/actions.ts apart from a hand-rolled PATCH to /rest/v1/quests. A
+-- table-wide update grant therefore made every server-side rule advisory:
+-- a client could raise `difficulty` before completing (breaking "declared
+-- at creation, never inflated after"), clear `weighty` to skip the
+-- Verification Screen, or null `requisites` to defeat the unprepared
+-- re-derivation. Restricting the grant to the columns the actions
+-- legitimately change closes all three at the database.
+grant select, insert on "profiles" to authenticated;
+grant update ("character_name", "title") on "profiles" to authenticated;
+
+grant select, insert, delete on "quests" to authenticated;
+grant update ("status", "completed_at") on "quests" to authenticated;
+
 grant select, insert on "event_log" to authenticated;

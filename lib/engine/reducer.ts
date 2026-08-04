@@ -68,10 +68,17 @@ export function localDayStart(now: Date, tzOffsetMinutes: number): Date {
 
 const dayNumber = (key: string) => Date.parse(key) / 86_400_000;
 
-/** ISO 8601 week key (UTC), e.g. "2026-W05". Used to bucket the weekly cap. */
-function isoWeekKey(d: Date): string {
+/**
+ * ISO 8601 week key, e.g. "2026-W05", shifted into the player's local time
+ * so the weekly cap resets on THEIR Monday. Bucketing this in UTC while
+ * every other boundary was local let a player west of UTC bank two weeks'
+ * cap inside one local week, and a player east of it lose the first
+ * completions of a fresh local Monday to the previous bucket.
+ */
+function isoWeekKey(d: Date, tzOffsetMinutes: number): string {
+  const shifted = new Date(d.getTime() + tzOffsetMinutes * 60_000);
   const date = new Date(
-    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+    Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate()),
   );
   const dayNum = date.getUTCDay() || 7;
   date.setUTCDate(date.getUTCDate() + 4 - dayNum);
@@ -141,6 +148,8 @@ export function reduce(
   /** questId → set of local day keys with a non-voided completion. */
   const questDays = new Map<string, Set<string>>();
   const questTotals = new Map<string, number>();
+  /** Quests whose NOT YET has already paid Integrity. */
+  const declinedQuests = new Set<string>();
 
   for (const ev of sorted) {
     if (ev.type === "quest_completed" && voided.has(ev.id)) continue;
@@ -151,7 +160,7 @@ export function reduce(
 
     if (ev.type === "quest_completed" || ev.type === "claim_verified") {
       const nominal = XP_BY_DIFFICULTY[ev.difficulty];
-      const week = isoWeekKey(new Date(ev.timestamp));
+      const week = isoWeekKey(new Date(ev.timestamp), tzOffsetMinutes);
       const usedSoFar = weeklyUsed.get(week) ?? 0;
       const remaining = Math.max(0, WEEKLY_XP_CAP - usedSoFar);
       const counted = Math.min(nominal, remaining);
@@ -171,7 +180,17 @@ export function reduce(
       // Integrity only. Structurally cannot touch XP, domains, or level —
       // the honesty path is never a worse move than claiming, and never a
       // way to farm progress either.
-      integrity += INTEGRITY_GAIN_ON_DECLINE;
+      //
+      // Counted ONCE PER QUEST. Declining the same milestone a second time
+      // is not a second act of honesty, and the quest deliberately stays
+      // active after a decline — so without this, tapping NOT YET
+      // repeatedly was an unbounded Integrity faucet that would have
+      // trivialised the Tier V honesty gate. Legacy events carry no
+      // questId and are each counted, as they always were.
+      if (!ev.questId || !declinedQuests.has(ev.questId)) {
+        integrity += INTEGRITY_GAIN_ON_DECLINE;
+        if (ev.questId) declinedQuests.add(ev.questId);
+      }
       lastActiveAt = ev.timestamp;
     } else if (ev.type === "claim_retracted") {
       // Refunds nothing: the XP from the original claim_verified stands.

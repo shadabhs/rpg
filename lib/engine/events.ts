@@ -40,10 +40,13 @@ export type SystemEvent =
       unprepared?: boolean;
     }
   | {
-      /** The player chose NOT YET. Grants Integrity, nothing else. */
+      /** The player chose NOT YET. Grants Integrity, nothing else — and
+       *  only the FIRST time for a given quest: declining the same
+       *  milestone twice is not a second act of honesty. */
       type: "claim_declined";
       id: string;
       timestamp: string;
+      questId?: string;
     }
   | {
       /** A prior claim_verified retracted during a seasonal self-audit.
