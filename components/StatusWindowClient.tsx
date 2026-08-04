@@ -714,7 +714,8 @@ export function StatusWindowClient({
                       onClick={() => handleUndo(q)}
                       disabled={busy === q.id}
                       data-testid={`undo-${q.id}`}
-                      className="mr-4 shrink-0 border border-edge px-2 py-1 font-sys text-[10px] tracking-[0.14em] text-ink-faint transition-colors hover:border-rust/60 hover:text-rust disabled:opacity-40"
+                      aria-label={`Undo completion of ${q.title}`}
+                      className="mr-3 min-h-11 shrink-0 self-stretch border border-edge px-3.5 font-sys text-[10px] tracking-[0.14em] text-ink-faint transition-colors hover:border-rust/60 hover:text-rust disabled:opacity-40"
                     >
                       UNDO
                     </button>
