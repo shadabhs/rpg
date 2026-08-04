@@ -29,6 +29,9 @@ export type CharacterState = {
   xpForNextLevel: number;
   totalXp: number;
   integrity: number;
+  /** Cosmetic currency from loot rolls. Grants nothing, buys nothing
+   *  that grants power — per the covenant, forever. */
+  gold: number;
   tier: number;
   /** Rust-adjusted values — what the Status Window shows. */
   domains: Record<DomainKey, number>;
@@ -131,6 +134,7 @@ export function reduce(
 
   let totalXp = 0;
   let integrity = INTEGRITY_BASELINE;
+  let gold = 0;
   let lastActiveAt: string | null = null;
 
   const weeklyUsed = new Map<string, number>();
@@ -162,6 +166,7 @@ export function reduce(
         questDays.get(ev.questId)!.add(localDayKey(ev.timestamp, tzOffsetMinutes));
         questTotals.set(ev.questId, (questTotals.get(ev.questId) ?? 0) + 1);
       }
+      if (ev.type === "quest_completed") gold += ev.gold ?? 0;
     } else if (ev.type === "claim_declined") {
       // Integrity only. Structurally cannot touch XP, domains, or level —
       // the honesty path is never a worse move than claiming, and never a
@@ -231,6 +236,7 @@ export function reduce(
     xpForNextLevel,
     totalXp,
     integrity,
+    gold,
     tier: tierForState(level, integrity),
     domains,
     domainsRaw,

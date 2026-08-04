@@ -18,6 +18,11 @@ export type SystemEvent =
       /** Which quest this completion belongs to. Optional because events
        *  written before the quest_id column existed don't carry it. */
       questId?: string;
+      /** Loot RESULT, rolled server-side at completion time (lib/loot.ts)
+       *  and stored here. Replay just sums it — chance never re-enters.
+       *  Absent on optimistic client events until the server answers. */
+      gold?: number;
+      item?: string;
     }
   | {
       /** A milestone/epic claim confirmed via the Verification Screen. */

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { reduce } from "./reducer";
 import { chronicleEntries, buildLedger } from "./chronicle";
+import { TITLE_DEFS, selectableTitles, DEFAULT_TITLE } from "./titles";
 import type { SystemEvent } from "./events";
 import type { DomainKey } from "./domains";
 import {
@@ -554,6 +555,126 @@ describe("chronicle & ledger — the System's memory, derived not stored", () =>
   });
 });
 
+describe("gold — replayed from stored rolls, voided with the completion", () => {
+  it("sums stored gold and never re-rolls", () => {
+    const events: SystemEvent[] = [
+      {
+        type: "quest_completed",
+        id: "a",
+        timestamp: iso(0),
+        domain: "vitality",
+        difficulty: "STANDARD",
+        questId: "train",
+        gold: 5,
+      },
+      {
+        type: "quest_completed",
+        id: "b",
+        timestamp: iso(1),
+        domain: "vitality",
+        difficulty: "HARD",
+        questId: "train",
+        gold: 14,
+        item: "Oath-Marked Coin",
+      },
+    ];
+    expect(reduce(events).gold).toBe(19);
+    // Determinism: same events, same gold, every replay.
+    expect(reduce(events).gold).toBe(reduce(events).gold);
+  });
+
+  it("undo takes the loot with it", () => {
+    const events: SystemEvent[] = [
+      {
+        type: "quest_completed",
+        id: "a",
+        timestamp: iso(0),
+        domain: "vitality",
+        difficulty: "STANDARD",
+        questId: "train",
+        gold: 7,
+      },
+      {
+        type: "completion_retracted",
+        id: "u1",
+        timestamp: iso(0),
+        retractsEventId: "a",
+      },
+    ];
+    expect(reduce(events).gold).toBe(0);
+  });
+});
+
+describe("titles — earned nouns, deterministic conditions", () => {
+  const byKey = Object.fromEntries(TITLE_DEFS.map((t) => [t.key, t]));
+
+  it("The Honest Hand requires a NOT YET on record", () => {
+    const none = reduce([]);
+    expect(byKey["honest-hand"].earned(none, [])).toBe(false);
+    const declined: SystemEvent[] = [
+      { type: "claim_declined", id: "d1", timestamp: iso(0) },
+    ];
+    expect(byKey["honest-hand"].earned(reduce(declined), declined)).toBe(true);
+  });
+
+  it("Unbroken VII requires a 7-day best streak on one quest", () => {
+    const six: SystemEvent[] = Array.from({ length: 6 }, (_, i) => ({
+      type: "quest_completed",
+      id: `s${i}`,
+      timestamp: iso(i),
+      domain: "vitality",
+      difficulty: "STANDARD",
+      questId: "train",
+    }));
+    expect(byKey["unbroken-vii"].earned(reduce(six, new Date(iso(5))), six)).toBe(
+      false,
+    );
+    const seven: SystemEvent[] = [
+      ...six,
+      {
+        type: "quest_completed",
+        id: "s7",
+        timestamp: iso(6),
+        domain: "vitality",
+        difficulty: "STANDARD",
+        questId: "train",
+      },
+    ];
+    expect(
+      byKey["unbroken-vii"].earned(reduce(seven, new Date(iso(6))), seven),
+    ).toBe(true);
+  });
+
+  it("The Returned witnesses the comeback, not the absence", () => {
+    const gap: SystemEvent[] = [
+      completed("a", 0, "vitality", "STANDARD"),
+      completed("b", 8, "vitality", "STANDARD"), // 8 days later
+    ];
+    expect(byKey["returned"].earned(reduce(gap), gap)).toBe(true);
+    const noGap: SystemEvent[] = [
+      completed("a", 0, "vitality", "STANDARD"),
+      completed("b", 3, "vitality", "STANDARD"),
+    ];
+    expect(byKey["returned"].earned(reduce(noGap), noGap)).toBe(false);
+  });
+
+  it("selectableTitles always includes the assigned default", () => {
+    expect(selectableTitles(reduce([]), [])).toContain(DEFAULT_TITLE);
+  });
+
+  it("level-gated titles unlock exactly at their level", () => {
+    // Enough STANDARD completions to clear level 2 (costs 60 XP).
+    const events: SystemEvent[] = [
+      completed("a", 0, "craft", "STANDARD"),
+      completed("b", 1, "craft", "STANDARD"),
+    ];
+    const state = reduce(events);
+    expect(state.level).toBeGreaterThanOrEqual(2);
+    expect(byKey["awakened"].earned(state, events)).toBe(true);
+    expect(byKey["persistent"].earned(state, events)).toBe(state.level >= 5);
+  });
+});
+
 describe("the AI boundary is structurally enforced, not just documented", () => {
   const forbidden = [
     "fetch(",
@@ -567,10 +688,12 @@ describe("the AI boundary is structurally enforced, not just documented", () => 
     "Math.random",
   ];
 
-  // chronicle.ts is held to the same standard: the System's voice is
-  // deterministic — an AI may later rephrase what it derives, but the
-  // derivation itself must never reach for a network or an LLM.
-  for (const file of ["reducer.ts", "rules.ts", "chronicle.ts"]) {
+  // chronicle.ts and titles.ts are held to the same standard: the
+  // System's voice and its granted nouns are deterministic — an AI may
+  // later rephrase what they derive, but the derivation itself must
+  // never reach for a network, randomness, or an LLM. (Loot's
+  // Math.random lives in lib/loot.ts, outside the engine, by design.)
+  for (const file of ["reducer.ts", "rules.ts", "chronicle.ts", "titles.ts"]) {
     it(`${file} contains no network I/O, randomness, or AI-client imports`, () => {
       const source = readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
       for (const needle of forbidden) {

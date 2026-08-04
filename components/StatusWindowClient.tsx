@@ -19,6 +19,7 @@ import { XP_BY_DIFFICULTY, TIER_NAMES, type Difficulty } from "@/lib/engine/rule
 import type { QuestRow, EpicRow } from "@/db/mappers";
 import { EpicsPanel } from "@/components/EpicsPanel";
 import { ChroniclePanel } from "@/components/ChroniclePanel";
+import { TitlesPanel } from "@/components/TitlesPanel";
 import { chronicleEntries, buildLedger } from "@/lib/engine/chronicle";
 import {
   completeQuest,
@@ -50,6 +51,7 @@ export function StatusWindowClient({
   const [events, setEvents] = useState<SystemEvent[]>(initialEvents);
   const [quests, setQuests] = useState<QuestRow[]>(initialQuests);
   const [epics, setEpics] = useState<EpicRow[]>(initialEpics);
+  const [wornTitle, setWornTitle] = useState(title);
   const muted = useMuted();
   const tz = useTzOffsetMinutes();
 
@@ -218,6 +220,34 @@ export function StatusWindowClient({
       }
       setRecord(null);
       rejected(result.error);
+      return;
+    }
+
+    // The loot reveal. XP was known before the tap (the honest mirror);
+    // only the garnish is random, rolled server-side — the optimistic
+    // event showed none rather than a fabricated guess, and is patched
+    // with the real roll here. The wait IS the anticipation beat.
+    const gold = result.gold ?? 0;
+    const item = result.item ?? undefined;
+    setEvents((evts) =>
+      evts.map((e) =>
+        e.id === optimisticId && e.type === "quest_completed"
+          ? { ...e, gold, item }
+          : e,
+      ),
+    );
+    if (gold > 0) {
+      setTimeout(() => {
+        play("tick");
+        toast(`+${gold} GOLD`, "var(--color-integrity)");
+      }, 650);
+    }
+    if (item) {
+      setTimeout(() => {
+        play("verify");
+        buzz("tap");
+        toast(`[ DROP ] ${item}`, "var(--color-integrity)", 3200);
+      }, 1500);
     }
   }
 
@@ -394,7 +424,9 @@ export function StatusWindowClient({
             <p className="font-sys text-[10px] tracking-[0.22em] text-ink-faint">
               {characterName}
             </p>
-            <p className="font-display text-2xl leading-tight text-ink">{title}</p>
+            <p className="font-display text-2xl leading-tight text-ink">
+              {wornTitle}
+            </p>
             <p className="mt-0.5 font-sys text-[10px] tracking-[0.16em] text-sys-dim">
               TIER {ROMAN[state.tier - 1]} · {TIER_NAMES[state.tier - 1]}
             </p>
@@ -417,9 +449,14 @@ export function StatusWindowClient({
                   }}
                 />
               </div>
-              <p className="mt-1 font-sys text-[10px] text-ink-dim">
-                <CountUp value={Math.round(xpPct)} duration={820} tick />% to Level{" "}
-                {state.level + 1}
+              <p className="mt-1 flex items-baseline justify-between font-sys text-[10px] text-ink-dim">
+                <span>
+                  <CountUp value={Math.round(xpPct)} duration={820} tick />% to
+                  Level {state.level + 1}
+                </span>
+                <span className="text-integrity">
+                  <CountUp value={state.gold} /> GOLD
+                </span>
               </p>
             </div>
 
@@ -578,6 +615,15 @@ export function StatusWindowClient({
       />
 
       <ChroniclePanel ledger={ledger} entries={chronicle} delay={520} />
+
+      <TitlesPanel
+        state={state}
+        events={events}
+        currentTitle={wornTitle}
+        onTitleChosen={setWornTitle}
+        onRejected={rejected}
+        delay={600}
+      />
 
       {/* ---------------- close-out ---------------- */}
       {dayClosed && (

@@ -54,7 +54,7 @@ export default async function StatusWindowPage() {
   const { data: eventRows, error: eventsError } = await supabase
     .from("event_log")
     .select(
-      "id, type, domain, difficulty, evidence, retracts_event_id, quest_id, occurred_at",
+      "id, type, domain, difficulty, evidence, retracts_event_id, quest_id, gold, item, occurred_at",
     )
     .eq("user_id", user.id);
 

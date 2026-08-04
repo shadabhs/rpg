@@ -48,6 +48,8 @@ export type EventRow = {
   evidence: string | null;
   retracts_event_id: string | null;
   quest_id: string | null;
+  gold: number | null;
+  item: string | null;
   occurred_at: string;
 };
 
@@ -61,6 +63,8 @@ export function rowToEvent(row: EventRow): SystemEvent {
         domain: row.domain as DomainKey,
         difficulty: row.difficulty as Difficulty,
         questId: row.quest_id ?? undefined,
+        gold: row.gold ?? undefined,
+        item: row.item ?? undefined,
       };
     case "claim_verified":
       return {

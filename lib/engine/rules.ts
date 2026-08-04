@@ -53,6 +53,42 @@ export function domainGainFromXp(xp: number): number {
   return Math.max(1, Math.round(xp / 20));
 }
 
+/**
+ * Loot — the garnish. Per the covenant: FIXED XP, VARIABLE LOOT. XP is
+ * the honest mirror and is never random; gold and drops are decoration,
+ * grant no power, and are the only place chance is allowed to live.
+ *
+ * These tables are pure data. The actual roll — the one place chance is
+ * allowed — lives in lib/loot.ts, OUTSIDE the engine: the reducer only
+ * ever replays the rolled result stored on the event, so replay stays
+ * deterministic and this file passes the static purity check.
+ *
+ * Tolerance guard per DESIGN.md: magnitudes are capped and do not
+ * escalate with progression.
+ */
+export const GOLD_BY_DIFFICULTY: Record<Difficulty, { min: number; max: number }> = {
+  TRIVIAL: { min: 1, max: 3 },
+  STANDARD: { min: 3, max: 8 },
+  HARD: { min: 8, max: 20 },
+  SEVERE: { min: 20, max: 50 },
+};
+
+export const DROP_CHANCE_BY_DIFFICULTY: Record<Difficulty, number> = {
+  TRIVIAL: 0.02,
+  STANDARD: 0.06,
+  HARD: 0.12,
+  SEVERE: 0.25,
+};
+
+/** Flavour items. Cosmetic, powerless, and worded so they honour the
+ *  effort rather than flatter the player. */
+export const ITEM_TABLE: Record<Difficulty, string[]> = {
+  TRIVIAL: ["Rust-flecked Token", "Bent Copper Pin", "Worn Bootlace"],
+  STANDARD: ["Field-Stitched Band", "Quenched Iron Nail", "Traveller's Chalk"],
+  HARD: ["Oath-Marked Coin", "Tempered Buckle", "Cartographer's Stub"],
+  SEVERE: ["Sigil of the Long Road", "Coldforged Clasp", "Witness Stone"],
+};
+
 /** Neutral baseline. Integrity is never interviewed and only ever rises. */
 export const INTEGRITY_BASELINE = 10;
 

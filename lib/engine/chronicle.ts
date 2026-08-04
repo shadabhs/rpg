@@ -64,7 +64,11 @@ export function chronicleEntries(
     switch (ev.type) {
       case "quest_completed":
         if (voided.has(ev.id)) break; // undone — it never happened
-        entries.push({ ...base, tag: "[DONE]", text: titleOf(ev.questId) });
+        entries.push({
+          ...base,
+          tag: "[DONE]",
+          text: ev.item ? `${titleOf(ev.questId)} · ${ev.item}` : titleOf(ev.questId),
+        });
         break;
       case "claim_verified":
         entries.push({

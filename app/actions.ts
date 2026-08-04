@@ -4,7 +4,10 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { DomainKey } from "@/lib/engine/domains";
 import type { Difficulty } from "@/lib/engine/rules";
-import { localDayStart } from "@/lib/engine/reducer";
+import { localDayStart, reduce } from "@/lib/engine/reducer";
+import { rowToEvent, type EventRow } from "@/db/mappers";
+import { rollLoot } from "@/lib/loot";
+import { selectableTitles } from "@/lib/engine/titles";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -43,7 +46,7 @@ async function requireUser() {
 export async function completeQuest(
   questId: string,
   tzOffsetMinutes: number = 0,
-): Promise<ActionResult> {
+): Promise<ActionResult & { gold?: number; item?: string | null }> {
   const { supabase, user } = await requireUser();
 
   const { data: quest, error: fetchError } = await supabase
@@ -82,12 +85,20 @@ export async function completeQuest(
 
   const now = new Date().toISOString();
 
+  // Fixed XP, variable loot: the roll happens HERE, once, server-side,
+  // and the result is stored on the event. The reducer only ever replays
+  // what was rolled — chance never re-enters, and undo voids the loot
+  // together with the completion.
+  const loot = rollLoot(quest.difficulty);
+
   const { error: insertError } = await supabase.from("event_log").insert({
     user_id: user.id,
     type: "quest_completed",
     domain: quest.domain,
     difficulty: quest.difficulty,
     quest_id: quest.id,
+    gold: loot.gold,
+    item: loot.item,
     occurred_at: now,
   });
   if (insertError) return { ok: false, error: insertError.message };
@@ -101,7 +112,7 @@ export async function completeQuest(
     if (updateError) return { ok: false, error: updateError.message };
   }
 
-  return { ok: true };
+  return { ok: true, gold: loot.gold, item: loot.item };
 }
 
 /** "I HAVE DONE THIS" on the Verification Screen. */
@@ -262,6 +273,38 @@ export async function undoCompletion(
       .eq("user_id", user.id);
     if (updateError) return { ok: false, error: updateError.message };
   }
+
+  return { ok: true };
+}
+
+/**
+ * Wear an earned title. Validated server-side: the entitlement is
+ * recomputed from the event log, so the client can request any string it
+ * likes and only ever wear what the record supports.
+ */
+export async function chooseTitle(titleName: string): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+
+  const { data: eventRows, error: readError } = await supabase
+    .from("event_log")
+    .select(
+      "id, type, domain, difficulty, evidence, retracts_event_id, quest_id, gold, item, occurred_at",
+    )
+    .eq("user_id", user.id);
+  if (readError) return { ok: false, error: readError.message };
+
+  const events = ((eventRows ?? []) as EventRow[]).map(rowToEvent);
+  const state = reduce(events);
+  const allowed = selectableTitles(state, events);
+  if (!allowed.includes(titleName)) {
+    return { ok: false, error: "That title has not been earned." };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ title: titleName })
+    .eq("user_id", user.id);
+  if (error) return { ok: false, error: error.message };
 
   return { ok: true };
 }
