@@ -119,3 +119,28 @@ against `policies.sql`, epics RLS isolation, and event_log append-only.
 **Cycle 5 — adversarial review.** Independent subagent pass over the four
 commits, covering covenant violations, the trust boundary, engine correctness,
 tone, and fabricated numbers.
+
+**Cycle 5 result — adversarial review found 12 real defects.** All fixed in
+`f2cf08f`, each with a regression test. The headline is a **critical covenant
+hole**: `domainGainFromXp` floored at 1, so once the weekly XP ceiling was
+spent a completion banked 0 XP but still raised the raw domain value — and
+since Requisite materials read that value, 200 trivial taps earning nothing
+could open a 200-material gate. The weekly ceiling exists precisely to stop
+that.
+
+Also fixed: NOT YET was an unbounded Integrity faucet (~20s of tapping cleared
+the Tier V gate); `verifyClaim` never checked `weighty`, letting a daily be
+claimed twice in a day; table-wide UPDATE grants let a client raise
+`difficulty`, clear `weighty`, or null `requisites` directly via PostgREST,
+making every server check advisory; the weekly cap bucketed by UTC week while
+all other boundaries were local; and the XP toast reported nominal rather than
+banked XP, contradicting the close-out panel on the same screen.
+
+The grant fix was verified adversarially against real PostgreSQL 16 — all four
+attack updates return "permission denied" while the legitimate
+`status`/`completed_at` write succeeds.
+
+**Lesson (added to CLAUDE.md #LESSONS):** 55 unit tests and 70 browser
+assertions all passed while a covenant-breaking farm existed, because the cap
+test asserted `totalXp` and never the domain values. Test the invariant, not
+the number that happens to be nearby.

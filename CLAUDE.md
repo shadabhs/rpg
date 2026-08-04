@@ -252,3 +252,18 @@ these tokens rather than introducing new colours or one-off transitions.
 - Never write to `event_log` from anywhere except `app/actions.ts`. Never let
   an AI-touched code path write XP, level, or Integrity — see the AI boundary
   in `AGENTS.md`.
+
+## #LESSONS
+
+- **Test the invariant, not the nearby number.** The weekly-cap test asserted
+  `totalXp` and passed for months while capped completions still raised domain
+  stats — the covenant's anti-farming rule was broken in a way 55 unit tests and
+  70 browser assertions all missed. When a rule says "X cannot be farmed", assert
+  it against *every* quantity X feeds, not just the headline one.
+- **Server Actions hold no more authority than the browser.** They run with the
+  signed-in user's own JWT, so RLS cannot distinguish `app/actions.ts` from a
+  hand-rolled PostgREST call. Any rule enforced only in an action is advisory
+  until the grant or policy enforces it too — grant UPDATE per column.
+- **Diagnose a failing check before touching it.** Of the browser suite's first
+  seven failures, six were the test's fault and one was a wrong fixture in my own
+  fix. Weakening an assertion to get green would have buried a real defect.
