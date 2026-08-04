@@ -16,7 +16,8 @@ import { reduce } from "@/lib/engine/reducer";
 import type { SystemEvent } from "@/lib/engine/events";
 import { DOMAIN_KEYS, DOMAIN_DISPLAY, type DomainKey } from "@/lib/engine/domains";
 import { XP_BY_DIFFICULTY, TIER_NAMES, type Difficulty } from "@/lib/engine/rules";
-import type { QuestRow } from "@/db/mappers";
+import type { QuestRow, EpicRow } from "@/db/mappers";
+import { EpicsPanel } from "@/components/EpicsPanel";
 import {
   completeQuest,
   undoCompletion,
@@ -36,14 +37,17 @@ export function StatusWindowClient({
   title,
   initialEvents,
   initialQuests,
+  initialEpics,
 }: {
   characterName: string;
   title: string;
   initialEvents: SystemEvent[];
   initialQuests: QuestRow[];
+  initialEpics: EpicRow[];
 }) {
   const [events, setEvents] = useState<SystemEvent[]>(initialEvents);
   const [quests, setQuests] = useState<QuestRow[]>(initialQuests);
+  const [epics, setEpics] = useState<EpicRow[]>(initialEpics);
   const muted = useMuted();
   const tz = useTzOffsetMinutes();
 
@@ -95,6 +99,9 @@ export function StatusWindowClient({
     q.cadence === "daily"
       ? !state.questStats[q.id]?.doneToday
       : q.status === "active";
+
+  const epicOf = (q: QuestRow) =>
+    q.epic_id ? (epics.find((e) => e.id === q.epic_id) ?? null) : null;
 
   const outstanding = quests.filter(isOutstanding);
   const hasAnyQuests = quests.length > 0;
@@ -447,6 +454,15 @@ export function StatusWindowClient({
                     </span>
 
                     <span className="min-w-0 flex-1">
+                      {epicOf(q) && (
+                        <span
+                          className="block truncate font-sys text-[9px] tracking-[0.16em]"
+                          style={{ color: domain.color, opacity: 0.75 }}
+                        >
+                          {q.weighty ? "MILESTONE · " : ""}
+                          {epicOf(q)!.title.toUpperCase()}
+                        </span>
+                      )}
                       <span
                         className={`block truncate text-sm ${
                           done ? "text-ink-faint line-through" : "text-ink"
@@ -509,12 +525,20 @@ export function StatusWindowClient({
         <NewQuestForm
           open={newQuestOpen}
           onOpenChange={setNewQuestOpen}
+          epics={epics}
           onCreated={(quest) => {
             setQuests((qs) => [...qs, quest]);
             setNewQuestOpen(false);
           }}
         />
       </Panel>
+
+      <EpicsPanel
+        epics={epics}
+        quests={quests}
+        delay={440}
+        onCreated={(epic) => setEpics((es) => [...es, epic])}
+      />
 
       {/* ---------------- close-out ---------------- */}
       {dayClosed && (
@@ -551,6 +575,7 @@ export function StatusWindowClient({
       {verifying && (
         <VerificationScreen
           quest={verifying}
+          epic={epicOf(verifying)}
           onConfirm={onConfirmVerify}
           onNotYet={onNotYet}
         />
@@ -589,12 +614,15 @@ export function StatusWindowClient({
 function NewQuestForm({
   open,
   onOpenChange,
+  epics,
   onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  epics: EpicRow[];
   onCreated: (quest: QuestRow) => void;
 }) {
+  const [epicId, setEpicId] = useState("");
   const [title, setTitle] = useState("");
   const [domain, setDomain] = useState<DomainKey>("vitality");
   const [difficulty, setDifficulty] = useState<Difficulty>("STANDARD");
@@ -622,6 +650,7 @@ function NewQuestForm({
     setSubmitting(true);
     setError("");
     const result = await createQuest({
+      epicId: epicId || null,
       title,
       domain,
       difficulty,
@@ -638,6 +667,7 @@ function NewQuestForm({
     }
     onCreated({
       id: result.id,
+      epic_id: epicId || null,
       title: title.trim(),
       domain,
       difficulty,
@@ -660,6 +690,30 @@ function NewQuestForm({
       onSubmit={onSubmit}
       className="animate-rise border-t border-edge/60 px-4 py-4"
     >
+      {epics.length > 0 && (
+        <label className="mb-3 block">
+          <span className="font-sys text-[10px] tracking-[0.2em] text-ink-faint">
+            PART OF
+          </span>
+          <select
+            value={epicId}
+            onChange={(e) => setEpicId(e.target.value)}
+            className="mt-1.5 w-full border-b border-edge bg-transparent pb-1.5 font-sys text-sm text-ink focus:border-sys focus:outline-none"
+          >
+            <option value="" className="bg-panel">
+              Nothing larger
+            </option>
+            {epics
+              .filter((e) => e.status === "active")
+              .map((e) => (
+                <option key={e.id} value={e.id} className="bg-panel">
+                  {e.title}
+                </option>
+              ))}
+          </select>
+        </label>
+      )}
+
       <label className="block">
         <span className="font-sys text-[10px] tracking-[0.2em] text-ink-faint">
           TITLE

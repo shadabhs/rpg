@@ -2,9 +2,19 @@ import type { SystemEvent } from "@/lib/engine/events";
 import type { DomainKey } from "@/lib/engine/domains";
 import type { Difficulty } from "@/lib/engine/rules";
 
+/** Raw shape of an `epics` row as returned by the Supabase client. */
+export type EpicRow = {
+  id: string;
+  title: string;
+  intent: string | null;
+  domain: DomainKey;
+  status: "active" | "completed" | "abandoned";
+};
+
 /** Raw shape of a `quests` row as returned by the Supabase client. */
 export type QuestRow = {
   id: string;
+  epic_id: string | null;
   title: string;
   domain: DomainKey;
   difficulty: Difficulty;

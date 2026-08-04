@@ -266,7 +266,35 @@ export async function undoCompletion(
   return { ok: true };
 }
 
+/** Declare an epic — a named long-term goal quests can belong to. Grants
+ *  nothing on its own: an epic is a container, and only the real actions
+ *  inside it move any number. */
+export async function createEpic(input: {
+  title: string;
+  intent: string;
+  domain: DomainKey;
+}): Promise<ActionResult & { id?: string }> {
+  const { supabase, user } = await requireUser();
+  if (!input.title.trim()) return { ok: false, error: "An epic needs a name." };
+
+  const { data, error } = await supabase
+    .from("epics")
+    .insert({
+      user_id: user.id,
+      title: input.title.trim(),
+      intent: input.intent.trim() || null,
+      domain: input.domain,
+      status: "active",
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) return { ok: false, error: error?.message ?? "Insert failed." };
+  return { ok: true, id: data.id };
+}
+
 export type NewQuestInput = {
+  epicId?: string | null;
   title: string;
   domain: DomainKey;
   difficulty: Difficulty;
@@ -289,10 +317,25 @@ export async function createQuest(
     return { ok: false, error: "When and where are not optional." };
   }
 
+  // An epic_id is only honoured if that epic really belongs to the acting
+  // user — never trust a client-supplied foreign key.
+  let epicId: string | null = null;
+  if (input.epicId) {
+    const { data: epic } = await supabase
+      .from("epics")
+      .select("id")
+      .eq("id", input.epicId)
+      .eq("user_id", user.id)
+      .single();
+    if (!epic) return { ok: false, error: "Epic not found." };
+    epicId = epic.id;
+  }
+
   const { data, error } = await supabase
     .from("quests")
     .insert({
       user_id: user.id,
+      epic_id: epicId,
       title: input.title.trim(),
       domain: input.domain,
       difficulty: input.difficulty,

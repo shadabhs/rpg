@@ -1,6 +1,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { rowToEvent, type EventRow, type QuestRow } from "@/db/mappers";
+import {
+  rowToEvent,
+  type EventRow,
+  type QuestRow,
+  type EpicRow,
+} from "@/db/mappers";
 import { StatusWindowClient } from "@/components/StatusWindowClient";
 
 /**
@@ -32,10 +37,16 @@ export default async function StatusWindowPage() {
     .eq("user_id", user.id)
     .single();
 
+  const { data: epicRows } = await supabase
+    .from("epics")
+    .select("id, title, intent, domain, status")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true });
+
   const { data: questRows } = await supabase
     .from("quests")
     .select(
-      "id, title, domain, difficulty, when_text, where_text, weighty, cadence, grants, status",
+      "id, epic_id, title, domain, difficulty, when_text, where_text, weighty, cadence, grants, status",
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: true });
@@ -55,6 +66,7 @@ export default async function StatusWindowPage() {
       title={profile?.title ?? "The Unproven"}
       initialEvents={events}
       initialQuests={(questRows ?? []) as QuestRow[]}
+      initialEpics={(epicRows ?? []) as EpicRow[]}
     />
   );
 }

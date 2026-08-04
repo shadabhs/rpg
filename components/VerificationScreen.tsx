@@ -21,10 +21,15 @@ import type { QuestRow } from "@/db/mappers";
  */
 export function VerificationScreen({
   quest,
+  epic,
   onConfirm,
   onNotYet,
 }: {
   quest: QuestRow;
+  /** The epic this milestone belongs to, if any. Its intent — the
+   *  player's own words for why the thing matters — is what makes
+   *  claiming a chapter weigh something. */
+  epic?: { title: string; intent: string | null } | null;
   onConfirm: (evidence: string) => void;
   onNotYet: () => void;
 }) {
@@ -48,6 +53,11 @@ export function VerificationScreen({
         </p>
 
         <div className="mt-7 border-l-2 border-integrity/40 pl-4">
+          {epic && (
+            <p className="mb-1.5 truncate font-sys text-[10px] tracking-[0.2em] text-sys-dim">
+              {epic.title.toUpperCase()}
+            </p>
+          )}
           <p className="font-sys text-[10px] tracking-[0.2em] text-ink-faint">
             YOU ARE CLAIMING
           </p>
@@ -56,12 +66,25 @@ export function VerificationScreen({
           </p>
         </div>
 
-        <div className="mt-5 border-l-2 border-edge pl-4">
-          <p className="font-sys text-[10px] tracking-[0.2em] text-ink-faint">
-            THIS GRANTS
-          </p>
-          <p className="mt-1.5 font-sys text-sm text-sys-bright">{quest.grants}</p>
-        </div>
+        {epic?.intent && (
+          <div className="mt-5 border-l-2 border-edge pl-4">
+            <p className="font-sys text-[10px] tracking-[0.2em] text-ink-faint">
+              YOU SAID THIS MATTERED BECAUSE
+            </p>
+            <p className="mt-1.5 font-sys text-sm leading-relaxed text-ink-dim">
+              {epic.intent}
+            </p>
+          </div>
+        )}
+
+        {quest.grants && (
+          <div className="mt-5 border-l-2 border-edge pl-4">
+            <p className="font-sys text-[10px] tracking-[0.2em] text-ink-faint">
+              THIS GRANTS
+            </p>
+            <p className="mt-1.5 font-sys text-sm text-sys-bright">{quest.grants}</p>
+          </div>
+        )}
 
         <p className="mt-8 font-sys text-[13px] leading-relaxed text-ink-dim">
           The System cannot check this.

@@ -15,6 +15,13 @@
       "when": 1785819937772,
       "tag": "0001_cloudy_tinkerer",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785822053799,
+      "tag": "0002_fuzzy_piledriver",
+      "breakpoints": true
     }
   ]
 }

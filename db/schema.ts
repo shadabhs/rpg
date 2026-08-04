@@ -32,6 +32,33 @@ export const profiles = pgTable("profiles", {
 });
 
 /**
+ * A named long-term goal — the campaign layer. Quests and milestones hang
+ * off an epic, which is what turns a flat list of chores into a story with
+ * chapters. Per DESIGN.md's hierarchy: Domain → Facet → Epic → Milestone →
+ * Habit/Quest. Progress is never stored here; it's derived by counting the
+ * epic's completed milestones, same discipline as the character sheet.
+ */
+export const epics = pgTable(
+  "epics",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull(),
+    title: text("title").notNull(),
+    /** The player's own statement of why this matters. Shown on the epic
+     *  panel and on the Verification Screen of its milestones — the line
+     *  that makes claiming one weigh something. */
+    intent: text("intent"),
+    domain: text("domain").notNull(), // DomainKey
+    status: text("status").notNull().default("active"), // active | completed | abandoned
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [index("epics_user_id_idx").on(t.userId)],
+);
+
+/**
  * User-authored quest definitions. This table IS allowed to be a normal
  * mutable row (edit a title, archive a quest) — it's a convenience index of
  * "what's outstanding," not the progression ledger. The one field that
@@ -44,6 +71,9 @@ export const quests = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: uuid("user_id").notNull(),
+    /** Null for a standalone quest; set when the quest belongs to an epic.
+     *  A weighty quest with an epic_id is that epic's milestone. */
+    epicId: uuid("epic_id"),
     title: text("title").notNull(),
     domain: text("domain").notNull(), // DomainKey
     difficulty: text("difficulty").notNull(), // Difficulty
