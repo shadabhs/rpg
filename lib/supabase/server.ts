@@ -15,6 +15,19 @@ export async function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      global: {
+        /**
+         * Never let Next's Data Cache serve a database read. Without this,
+         * supabase-js calls fetch() with no cache directive and Next is
+         * free to memoize the REST response — which it demonstrably did in
+         * production: live QA observed the Status Window serving a STALE
+         * event log across genuine hard reloads, and the undo action
+         * failing because its own read couldn't see a completion that was
+         * committed minutes earlier. An event-sourced app must read its
+         * log fresh, every time, everywhere.
+         */
+        fetch: (url, init) => fetch(url, { ...init, cache: "no-store" }),
+      },
       cookies: {
         getAll() {
           return cookieStore.getAll();

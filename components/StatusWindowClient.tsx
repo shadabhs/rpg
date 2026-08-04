@@ -104,6 +104,31 @@ export function StatusWindowClient({
     return `optimistic-${optimisticId.current}`;
   }
 
+  /**
+   * Server Action calls can THROW (network failure, deploy mid-flight),
+   * not just return { ok: false }. An uncaught throw between markBusy(id)
+   * and markBusy(null) would strand `busy` forever — after which every
+   * tap silently returns early and the whole app reads as dead. Every
+   * awaited action goes through here: a throw becomes an ordinary
+   * rejection, and busy ALWAYS clears.
+   */
+  async function safeCall<T extends { ok: boolean }>(
+    busyId: string | null,
+    call: () => Promise<T>,
+  ): Promise<T | { ok: false; error: string }> {
+    if (busyId !== null) markBusy(busyId);
+    try {
+      return await call();
+    } catch {
+      return {
+        ok: false,
+        error: "The System could not be reached. Nothing was recorded.",
+      };
+    } finally {
+      if (busyId !== null) markBusy(null);
+    }
+  }
+
   // Adopt server truth whenever router.refresh() delivers fresh rows and
   // no action is in flight. This is what makes any client/server drift
   // self-healing instead of permanent: the QA pass proved a desync could
@@ -274,9 +299,7 @@ export function StatusWindowClient({
       buzz("complete");
     }
 
-    markBusy(quest.id);
-    const result = await completeQuest(quest.id, tz);
-    markBusy(null);
+    const result = await safeCall(quest.id, () => completeQuest(quest.id, tz));
     if (!result.ok) {
       revert(optimisticId);
       if (!isDaily) {
@@ -347,9 +370,7 @@ export function StatusWindowClient({
     // and showed a "−0 XP" façade while nothing changed). Ask the server —
     // it resolves the real event from the log — then adopt its answer.
     if (!target) {
-      markBusy(quest.id);
-      const result = await undoCompletion(quest.id, tz);
-      markBusy(null);
+      const result = await safeCall(quest.id, () => undoCompletion(quest.id, tz));
       if (!result.ok) {
         rejected(result.error);
         return;
@@ -377,9 +398,7 @@ export function StatusWindowClient({
     buzz("tap");
     toast(`[ RETRACTED ] −${before.totalXp - after.totalXp} XP`, "var(--color-rust)");
 
-    markBusy(quest.id);
-    const result = await undoCompletion(quest.id, tz);
-    markBusy(null);
+    const result = await safeCall(quest.id, () => undoCompletion(quest.id, tz));
     if (!result.ok) {
       revert(optimisticId);
       if (!isDaily) {
@@ -415,7 +434,7 @@ export function StatusWindowClient({
       setTimeout(() => setLevelUp({ from: before.level, to: after.level }), 420);
     }
 
-    const result = await verifyClaim(quest.id, evidence, tz);
+    const result = await safeCall(quest.id, () => verifyClaim(quest.id, evidence, tz));
     if (!result.ok) {
       revert(optimisticId);
       setQuests((qs) =>
@@ -456,7 +475,7 @@ export function StatusWindowClient({
     buzz("tap");
     toast(`+${after.integrity - before.integrity} INTEGRITY`, "var(--color-integrity)");
 
-    const result = await declineClaim(quest.id);
+    const result = await safeCall(quest.id, () => declineClaim(quest.id));
     if (!result.ok) {
       revert(optimisticId);
       rejected(result.error);

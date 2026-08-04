@@ -13,7 +13,14 @@ import { StatusWindowClient } from "@/components/StatusWindowClient";
  * real data and hands it to the client component that owns the
  * interactive/animated UI. lib/data.ts (Phase 0's fake data) is gone —
  * this is what replaced it.
+ *
+ * Explicitly uncacheable, twice over (alongside the no-store fetch in
+ * lib/supabase/server.ts): the character IS the event log, so a cached
+ * render is a wrong character. Live QA caught exactly that — stale
+ * totals surviving hard reloads.
  */
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 export default async function StatusWindowPage() {
   const supabase = await createClient();
 
