@@ -34,7 +34,9 @@ export default async function StatusWindowPage() {
 
   const { data: questRows } = await supabase
     .from("quests")
-    .select("id, title, domain, difficulty, when_text, where_text, weighty, grants, status")
+    .select(
+      "id, title, domain, difficulty, when_text, where_text, weighty, cadence, grants, status",
+    )
     .eq("user_id", user.id)
     .order("created_at", { ascending: true });
 

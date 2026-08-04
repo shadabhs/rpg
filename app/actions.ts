@@ -4,8 +4,18 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { DomainKey } from "@/lib/engine/domains";
 import type { Difficulty } from "@/lib/engine/rules";
+import { localDayStart } from "@/lib/engine/reducer";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
+
+/** Clamp a client-supplied UTC offset to the real range (±14h). The offset
+ *  only moves day boundaries for daily-quest bookkeeping — worst case a
+ *  manipulated offset squeezes in one extra completion around midnight,
+ *  which the weekly XP cap already bounds. Not a trust surface. */
+function clampTz(tzOffsetMinutes: number): number {
+  if (!Number.isFinite(tzOffsetMinutes)) return 0;
+  return Math.max(-840, Math.min(840, Math.round(tzOffsetMinutes)));
+}
 
 /**
  * Every mutation below re-derives the acting user from the session
@@ -26,9 +36,14 @@ async function requireUser() {
   return { supabase, user };
 }
 
-/** One-tap daily completion. Never used for weighty quests — those go
- *  through verifyClaim/declineClaim instead, enforced below. */
-export async function completeQuest(questId: string): Promise<ActionResult> {
+/** One-tap completion. Never used for weighty quests — those go through
+ *  verifyClaim/declineClaim instead, enforced below. A 'daily' quest stays
+ *  active forever; "done today" is derived from the event log, which is
+ *  what makes streaks computable from the log alone. */
+export async function completeQuest(
+  questId: string,
+  tzOffsetMinutes: number = 0,
+): Promise<ActionResult> {
   const { supabase, user } = await requireUser();
 
   const { data: quest, error: fetchError } = await supabase
@@ -44,6 +59,27 @@ export async function completeQuest(questId: string): Promise<ActionResult> {
     return { ok: false, error: "Milestones require verification, not a tap." };
   }
 
+  const isDaily = quest.cadence === "daily";
+  if (isDaily) {
+    const boundary = localDayStart(new Date(), clampTz(tzOffsetMinutes)).toISOString();
+    const { data: todays, error: todayError } = await supabase
+      .from("event_log")
+      .select("id, type, retracts_event_id")
+      .eq("user_id", user.id)
+      .eq("quest_id", questId)
+      .gte("occurred_at", boundary);
+    if (todayError) return { ok: false, error: todayError.message };
+    const undone = new Set(
+      (todays ?? [])
+        .filter((r) => r.type === "completion_retracted")
+        .map((r) => r.retracts_event_id),
+    );
+    const alreadyDone = (todays ?? []).some(
+      (r) => r.type === "quest_completed" && !undone.has(r.id),
+    );
+    if (alreadyDone) return { ok: false, error: "Already done today." };
+  }
+
   const now = new Date().toISOString();
 
   const { error: insertError } = await supabase.from("event_log").insert({
@@ -56,12 +92,14 @@ export async function completeQuest(questId: string): Promise<ActionResult> {
   });
   if (insertError) return { ok: false, error: insertError.message };
 
-  const { error: updateError } = await supabase
-    .from("quests")
-    .update({ status: "completed", completed_at: now })
-    .eq("id", questId)
-    .eq("user_id", user.id);
-  if (updateError) return { ok: false, error: updateError.message };
+  if (!isDaily) {
+    const { error: updateError } = await supabase
+      .from("quests")
+      .update({ status: "completed", completed_at: now })
+      .eq("id", questId)
+      .eq("user_id", user.id);
+    if (updateError) return { ok: false, error: updateError.message };
+  }
 
   return { ok: true };
 }
@@ -144,12 +182,15 @@ export async function declineClaim(questId: string): Promise<ActionResult> {
  * event, and the only exit from one is claim_retracted at the seasonal
  * audit, which refunds nothing.
  */
-export async function undoCompletion(questId: string): Promise<ActionResult> {
+export async function undoCompletion(
+  questId: string,
+  tzOffsetMinutes: number = 0,
+): Promise<ActionResult> {
   const { supabase, user } = await requireUser();
 
   const { data: quest, error: fetchError } = await supabase
     .from("quests")
-    .select("id, weighty, status")
+    .select("id, weighty, status, cadence")
     .eq("id", questId)
     .eq("user_id", user.id)
     .single();
@@ -161,11 +202,19 @@ export async function undoCompletion(questId: string): Promise<ActionResult> {
       error: "Verified claims are retracted at the seasonal audit, not undone.",
     };
   }
-  if (quest.status !== "completed") return { ok: false, error: "Nothing to undo." };
+  const isDaily = quest.cadence === "daily";
+  // A daily quest never leaves 'active', so status can't gate its undo; a
+  // once quest must actually be completed.
+  if (!isDaily && quest.status !== "completed") {
+    return { ok: false, error: "Nothing to undo." };
+  }
 
   // Latest completion for this quest that hasn't already been retracted.
   // Resolved server-side from the log — the client's optimistic event ids
   // never match the database's, so it can't be trusted to name the row.
+  // For dailies only today's completion is undoable: a misclick is noticed
+  // today, and un-writing an older day would silently rewrite streak
+  // history.
   const { data: rows, error: logError } = await supabase
     .from("event_log")
     .select("id, type, retracts_event_id, occurred_at")
@@ -180,10 +229,21 @@ export async function undoCompletion(questId: string): Promise<ActionResult> {
       .filter((r) => r.type === "completion_retracted")
       .map((r) => r.retracts_event_id),
   );
+  const boundaryMs = localDayStart(new Date(), clampTz(tzOffsetMinutes)).getTime();
   const target = (rows ?? [])
     .reverse()
-    .find((r) => r.type === "quest_completed" && !alreadyRetracted.has(r.id));
-  if (!target) return { ok: false, error: "No completion on record to undo." };
+    .find(
+      (r) =>
+        r.type === "quest_completed" &&
+        !alreadyRetracted.has(r.id) &&
+        (!isDaily || new Date(r.occurred_at).getTime() >= boundaryMs),
+    );
+  if (!target) {
+    return {
+      ok: false,
+      error: isDaily ? "Nothing done today to undo." : "No completion on record to undo.",
+    };
+  }
 
   const { error: insertError } = await supabase.from("event_log").insert({
     user_id: user.id,
@@ -194,12 +254,14 @@ export async function undoCompletion(questId: string): Promise<ActionResult> {
   });
   if (insertError) return { ok: false, error: insertError.message };
 
-  const { error: updateError } = await supabase
-    .from("quests")
-    .update({ status: "active", completed_at: null })
-    .eq("id", questId)
-    .eq("user_id", user.id);
-  if (updateError) return { ok: false, error: updateError.message };
+  if (!isDaily) {
+    const { error: updateError } = await supabase
+      .from("quests")
+      .update({ status: "active", completed_at: null })
+      .eq("id", questId)
+      .eq("user_id", user.id);
+    if (updateError) return { ok: false, error: updateError.message };
+  }
 
   return { ok: true };
 }
@@ -211,6 +273,7 @@ export type NewQuestInput = {
   whenText: string;
   whereText: string;
   weighty: boolean;
+  cadence: "once" | "daily";
   grants?: string;
 };
 
@@ -236,6 +299,8 @@ export async function createQuest(
       when_text: input.whenText.trim(),
       where_text: input.whereText.trim(),
       weighty: input.weighty,
+      // A milestone is claimed once, by definition — it can never recur.
+      cadence: input.weighty ? "once" : input.cadence,
       grants: input.weighty ? (input.grants?.trim() ?? null) : null,
       status: "active",
     })

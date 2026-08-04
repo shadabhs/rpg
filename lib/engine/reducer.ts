@@ -12,6 +12,17 @@ import {
   tierForState,
 } from "./rules";
 
+export type QuestStats = {
+  /** A non-voided completion exists in the current local day. */
+  doneToday: boolean;
+  /** Consecutive local days with a completion, ending today or yesterday —
+   *  a streak isn't broken until a full day passes without the deed. */
+  streak: number;
+  /** Longest run ever. Never resets — per DESIGN.md, history is banked. */
+  bestStreak: number;
+  totalCompletions: number;
+};
+
 export type CharacterState = {
   level: number;
   xpIntoLevel: number;
@@ -25,7 +36,34 @@ export type CharacterState = {
   domainsRaw: Record<DomainKey, number>;
   lastActiveAt: string | null;
   daysAbsent: number;
+  /** Per-quest streak stats, keyed by quest id. Only quests whose events
+   *  carry a questId appear — derived entirely from the log, like
+   *  everything else. */
+  questStats: Record<string, QuestStats>;
 };
+
+/**
+ * Local-day key ("2026-08-04") for a moment, shifted by the viewer's UTC
+ * offset in minutes. Streaks are about the player's day: a workout at
+ * 00:30 IST belongs to the IST date, not the UTC one.
+ */
+export function localDayKey(
+  isoOrDate: string | Date,
+  tzOffsetMinutes: number,
+): string {
+  const t = new Date(isoOrDate).getTime() + tzOffsetMinutes * 60_000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+/** Start of the current local day, as a real UTC instant — used server-side
+ *  to ask "is there already a completion today?" */
+export function localDayStart(now: Date, tzOffsetMinutes: number): Date {
+  const shifted = now.getTime() + tzOffsetMinutes * 60_000;
+  const floored = Math.floor(shifted / 86_400_000) * 86_400_000;
+  return new Date(floored - tzOffsetMinutes * 60_000);
+}
+
+const dayNumber = (key: string) => Date.parse(key) / 86_400_000;
 
 /** ISO 8601 week key (UTC), e.g. "2026-W05". Used to bucket the weekly cap. */
 function isoWeekKey(d: Date): string {
@@ -69,6 +107,7 @@ function totalXpToLevel(totalXp: number): {
 export function reduce(
   events: SystemEvent[],
   now: Date = new Date(),
+  tzOffsetMinutes: number = 0,
 ): CharacterState {
   const sorted = [...events].sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
@@ -95,6 +134,9 @@ export function reduce(
   let lastActiveAt: string | null = null;
 
   const weeklyUsed = new Map<string, number>();
+  /** questId → set of local day keys with a non-voided completion. */
+  const questDays = new Map<string, Set<string>>();
+  const questTotals = new Map<string, number>();
 
   for (const ev of sorted) {
     if (ev.type === "quest_completed" && voided.has(ev.id)) continue;
@@ -114,6 +156,12 @@ export function reduce(
       totalXp += counted;
       domainsRaw[ev.domain] += domainGainFromXp(counted);
       lastActiveAt = ev.timestamp;
+
+      if (ev.type === "quest_completed" && ev.questId) {
+        if (!questDays.has(ev.questId)) questDays.set(ev.questId, new Set());
+        questDays.get(ev.questId)!.add(localDayKey(ev.timestamp, tzOffsetMinutes));
+        questTotals.set(ev.questId, (questTotals.get(ev.questId) ?? 0) + 1);
+      }
     } else if (ev.type === "claim_declined") {
       // Integrity only. Structurally cannot touch XP, domains, or level —
       // the honesty path is never a worse move than claiming, and never a
@@ -145,6 +193,38 @@ export function reduce(
     DOMAIN_KEYS.map((k) => [k, Math.round(domainsRaw[k] * (1 - rust))]),
   ) as Record<DomainKey, number>;
 
+  // Per-quest streaks, from the day-key sets. A streak survives until a
+  // full local day passes with nothing — so it counts back from today if
+  // done today, otherwise from yesterday.
+  const todayNum = dayNumber(localDayKey(now, tzOffsetMinutes));
+  const questStats: Record<string, QuestStats> = {};
+  for (const [questId, days] of questDays) {
+    const nums = new Set([...days].map(dayNumber));
+    const doneToday = nums.has(todayNum);
+
+    let streak = 0;
+    let cursor = doneToday ? todayNum : todayNum - 1;
+    while (nums.has(cursor)) {
+      streak += 1;
+      cursor -= 1;
+    }
+
+    let bestStreak = 0;
+    for (const n of nums) {
+      if (nums.has(n - 1)) continue; // only start counting at run starts
+      let len = 1;
+      while (nums.has(n + len)) len += 1;
+      bestStreak = Math.max(bestStreak, len);
+    }
+
+    questStats[questId] = {
+      doneToday,
+      streak,
+      bestStreak,
+      totalCompletions: questTotals.get(questId) ?? 0,
+    };
+  }
+
   return {
     level,
     xpIntoLevel,
@@ -156,5 +236,6 @@ export function reduce(
     domainsRaw,
     lastActiveAt,
     daysAbsent,
+    questStats,
   };
 }

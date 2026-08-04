@@ -11,6 +11,7 @@ export type QuestRow = {
   when_text: string;
   where_text: string;
   weighty: boolean;
+  cadence: "once" | "daily";
   grants: string | null;
   status: "active" | "completed" | "archived";
 };

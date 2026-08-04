@@ -39,3 +39,26 @@ export function useReducedMotion(): boolean {
 export function useMuted(): boolean {
   return useSyncExternalStore(subscribeMuted, isMuted, mutedServerSnapshot);
 }
+
+/**
+ * The viewer's UTC offset in minutes (IST = +330), for day-boundary math —
+ * streaks and "done today" are about the player's day, not UTC's. Server
+ * snapshot is 0: the server can't know the client's timezone, and via
+ * useSyncExternalStore the client corrects on hydration without a mismatch
+ * error (same trick as useReducedMotion above).
+ */
+function subscribeTz() {
+  return () => {};
+}
+
+function tzSnapshot() {
+  return -new Date().getTimezoneOffset();
+}
+
+function tzServerSnapshot() {
+  return 0;
+}
+
+export function useTzOffsetMinutes(): number {
+  return useSyncExternalStore(subscribeTz, tzSnapshot, tzServerSnapshot);
+}

@@ -8,8 +8,9 @@ import { CountUp } from "@/components/CountUp";
 import { VerificationScreen } from "@/components/VerificationScreen";
 import { LevelUpOverlay } from "@/components/LevelUpOverlay";
 import { TierUpOverlay } from "@/components/TierUpOverlay";
+import { RecordOverlay } from "@/components/RecordOverlay";
 import { initAudio, play, setMuted } from "@/lib/sound";
-import { useMuted } from "@/lib/hooks";
+import { useMuted, useTzOffsetMinutes } from "@/lib/hooks";
 import { buzz } from "@/lib/haptics";
 import { reduce } from "@/lib/engine/reducer";
 import type { SystemEvent } from "@/lib/engine/events";
@@ -44,6 +45,7 @@ export function StatusWindowClient({
   const [events, setEvents] = useState<SystemEvent[]>(initialEvents);
   const [quests, setQuests] = useState<QuestRow[]>(initialQuests);
   const muted = useMuted();
+  const tz = useTzOffsetMinutes();
 
   const [verifying, setVerifying] = useState<QuestRow | null>(null);
   const [levelUp, setLevelUp] = useState<{ from: number; to: number } | null>(null);
@@ -51,6 +53,11 @@ export function StatusWindowClient({
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [newQuestOpen, setNewQuestOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [record, setRecord] = useState<{
+    quest: string;
+    streak: number;
+    previous: number;
+  } | null>(null);
 
   const [seconds, setSeconds] = useState(0);
   const toastId = useRef(0);
@@ -69,7 +76,7 @@ export function StatusWindowClient({
   // The single source of truth for level/XP/Integrity/domains/tier. Same
   // pure function the server uses to persist truth — running it here too
   // is what makes the optimistic update exact rather than approximate.
-  const state = useMemo(() => reduce(events), [events]);
+  const state = useMemo(() => reduce(events, new Date(), tz), [events, tz]);
 
   const domains = DOMAIN_KEYS.map((key) => ({
     key,
@@ -82,9 +89,16 @@ export function StatusWindowClient({
     [domains],
   );
 
-  const activeQuests = quests.filter((q) => q.status === "active");
+  /** Outstanding right now: a once-quest still active, or a daily not yet
+   *  done today. This is what "remaining" and the close-out both key off. */
+  const isOutstanding = (q: QuestRow) =>
+    q.cadence === "daily"
+      ? !state.questStats[q.id]?.doneToday
+      : q.status === "active";
+
+  const outstanding = quests.filter(isOutstanding);
   const hasAnyQuests = quests.length > 0;
-  const dayClosed = hasAnyQuests && activeQuests.length === 0;
+  const dayClosed = hasAnyQuests && outstanding.length === 0;
   const xpPct = Math.min(100, (state.xpIntoLevel / state.xpForNextLevel) * 100);
 
   // Fire the tier overlay whenever the derived tier actually rises —
@@ -103,9 +117,10 @@ export function StatusWindowClient({
   }
 
   function optimisticAppend(event: SystemEvent) {
-    const before = reduce(events);
+    const now = new Date();
+    const before = reduce(events, now, tz);
     const nextEvents = [...events, event];
-    const after = reduce(nextEvents);
+    const after = reduce(nextEvents, now, tz);
     setEvents(nextEvents);
     return { before, after };
   }
@@ -115,7 +130,12 @@ export function StatusWindowClient({
   }
 
   async function handleQuestTap(quest: QuestRow) {
-    if (quest.status !== "active" || busy) return;
+    if (busy) return;
+    const isDaily = quest.cadence === "daily";
+    // A daily never leaves 'active'; "done today" is what gates it.
+    if (isDaily ? state.questStats[quest.id]?.doneToday : quest.status !== "active") {
+      return;
+    }
     initAudio();
 
     if (quest.weighty) {
@@ -124,9 +144,11 @@ export function StatusWindowClient({
     }
 
     const optimisticId = nextOptimisticId();
-    setQuests((qs) =>
-      qs.map((q) => (q.id === quest.id ? { ...q, status: "completed" } : q)),
-    );
+    if (!isDaily) {
+      setQuests((qs) =>
+        qs.map((q) => (q.id === quest.id ? { ...q, status: "completed" } : q)),
+      );
+    }
     const { before, after } = optimisticAppend({
       type: "quest_completed",
       id: optimisticId,
@@ -139,6 +161,14 @@ export function StatusWindowClient({
     const gain = XP_BY_DIFFICULTY[quest.difficulty];
     toast(`+${gain} XP`, DOMAIN_DISPLAY[quest.domain].color);
 
+    // The System reports reality, it never congratulates. A record line
+    // states the fact and the number it beat — nothing more.
+    const wasBest = before.questStats[quest.id]?.bestStreak ?? 0;
+    const nowStreak = after.questStats[quest.id]?.streak ?? 0;
+    if (isDaily && nowStreak > wasBest && nowStreak > 1) {
+      setRecord({ quest: quest.title, streak: nowStreak, previous: wasBest });
+    }
+
     if (after.level > before.level) {
       setTimeout(() => setLevelUp({ from: before.level, to: after.level }), 420);
     } else {
@@ -147,13 +177,16 @@ export function StatusWindowClient({
     }
 
     setBusy(quest.id);
-    const result = await completeQuest(quest.id);
+    const result = await completeQuest(quest.id, tz);
     setBusy(null);
     if (!result.ok) {
       revert(optimisticId);
-      setQuests((qs) =>
-        qs.map((q) => (q.id === quest.id ? { ...q, status: "active" } : q)),
-      );
+      if (!isDaily) {
+        setQuests((qs) =>
+          qs.map((q) => (q.id === quest.id ? { ...q, status: "active" } : q)),
+        );
+      }
+      setRecord(null);
       toast(`[ REJECTED ] ${result.error}`, "var(--color-rust)");
     }
   }
@@ -179,10 +212,13 @@ export function StatusWindowClient({
           !alreadyRetracted.has(e.id),
       );
 
+    const isDaily = quest.cadence === "daily";
     const optimisticId = nextOptimisticId();
-    setQuests((qs) =>
-      qs.map((q) => (q.id === quest.id ? { ...q, status: "active" } : q)),
-    );
+    if (!isDaily) {
+      setQuests((qs) =>
+        qs.map((q) => (q.id === quest.id ? { ...q, status: "active" } : q)),
+      );
+    }
     const { before, after } = optimisticAppend({
       type: "completion_retracted",
       id: optimisticId,
@@ -195,13 +231,15 @@ export function StatusWindowClient({
     toast(`[ RETRACTED ] −${before.totalXp - after.totalXp} XP`, "var(--color-rust)");
 
     setBusy(quest.id);
-    const result = await undoCompletion(quest.id);
+    const result = await undoCompletion(quest.id, tz);
     setBusy(null);
     if (!result.ok) {
       revert(optimisticId);
-      setQuests((qs) =>
-        qs.map((q) => (q.id === quest.id ? { ...q, status: "completed" } : q)),
-      );
+      if (!isDaily) {
+        setQuests((qs) =>
+          qs.map((q) => (q.id === quest.id ? { ...q, status: "completed" } : q)),
+        );
+      }
       toast(`[ REJECTED ] ${result.error}`, "var(--color-rust)");
     }
   }
@@ -376,7 +414,7 @@ export function StatusWindowClient({
 
       {/* ---------------- today ---------------- */}
       <Panel
-        label={`Today · ${activeQuests.length} remaining`}
+        label={`Today · ${outstanding.length} remaining`}
         delay={360}
         className="mt-3"
       >
@@ -384,7 +422,9 @@ export function StatusWindowClient({
           <ul>
             {quests.map((q) => {
               const domain = DOMAIN_DISPLAY[q.domain];
-              const done = q.status !== "active";
+              const stats = state.questStats[q.id];
+              const isDaily = q.cadence === "daily";
+              const done = isDaily ? !!stats?.doneToday : q.status !== "active";
               return (
                 <li
                   key={q.id}
@@ -416,6 +456,16 @@ export function StatusWindowClient({
                       </span>
                       <span className="mt-0.5 block truncate font-sys text-[10px] text-ink-faint">
                         {q.when_text} · {q.where_text}
+                        {isDaily && stats && stats.streak > 0 && (
+                          <>
+                            {" · "}
+                            <span className="text-integrity">
+                              {stats.streak}d streak
+                            </span>
+                            {stats.bestStreak > stats.streak &&
+                              ` · best ${stats.bestStreak}`}
+                          </>
+                        )}
                       </span>
                     </span>
 
@@ -424,7 +474,7 @@ export function StatusWindowClient({
                         className="block font-sys text-[10px] tracking-[0.12em]"
                         style={{ color: domain.color }}
                       >
-                        {q.difficulty}
+                        {isDaily ? `DAILY · ${q.difficulty}` : q.difficulty}
                       </span>
                       <span className="tnum block font-sys text-[11px] text-ink-dim">
                         {XP_BY_DIFFICULTY[q.difficulty]} XP
@@ -514,6 +564,15 @@ export function StatusWindowClient({
         />
       )}
 
+      {record && !levelUp && (
+        <RecordOverlay
+          quest={record.quest}
+          streak={record.streak}
+          previous={record.previous}
+          onDone={() => setRecord(null)}
+        />
+      )}
+
       {tierUp && (
         <TierUpOverlay
           from={tierUp.from}
@@ -542,6 +601,7 @@ function NewQuestForm({
   const [whenText, setWhenText] = useState("");
   const [whereText, setWhereText] = useState("");
   const [weighty, setWeighty] = useState(false);
+  const [cadence, setCadence] = useState<"once" | "daily">("daily");
   const [grants, setGrants] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -568,6 +628,7 @@ function NewQuestForm({
       whenText,
       whereText,
       weighty,
+      cadence,
       grants,
     });
     setSubmitting(false);
@@ -583,6 +644,7 @@ function NewQuestForm({
       when_text: whenText.trim(),
       where_text: whereText.trim(),
       weighty,
+      cadence: weighty ? "once" : cadence,
       grants: weighty ? grants.trim() || null : null,
       status: "active",
     });
@@ -674,6 +736,30 @@ function NewQuestForm({
           />
         </label>
       </div>
+
+      {!weighty && (
+        <div className="mt-4">
+          <span className="font-sys text-[10px] tracking-[0.2em] text-ink-faint">
+            CADENCE
+          </span>
+          <div className="mt-2 grid grid-cols-2 gap-2.5">
+            {(["daily", "once"] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCadence(c)}
+                className={`border py-2 font-sys text-[10px] tracking-[0.14em] transition-colors ${
+                  cadence === c
+                    ? "border-sys/60 bg-sys/10 text-sys-bright"
+                    : "border-edge text-ink-dim hover:border-sys/40"
+                }`}
+              >
+                {c === "daily" ? "DAILY · BUILDS A STREAK" : "ONCE"}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <label className="mt-4 flex items-center gap-2">
         <input

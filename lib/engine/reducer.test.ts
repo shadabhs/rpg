@@ -318,6 +318,114 @@ describe("completion_retracted — the misclick undo", () => {
   });
 });
 
+describe("streaks — what makes tomorrow exist", () => {
+  const daily = (id: string, day: number): SystemEvent => ({
+    type: "quest_completed",
+    id,
+    timestamp: iso(day),
+    domain: "vitality",
+    difficulty: "STANDARD",
+    questId: "train",
+  });
+
+  it("counts consecutive days and reports doneToday", () => {
+    const events = [daily("a", 0), daily("b", 1), daily("c", 2)];
+    const state = reduce(events, new Date(iso(2)));
+    expect(state.questStats.train.streak).toBe(3);
+    expect(state.questStats.train.doneToday).toBe(true);
+    expect(state.questStats.train.totalCompletions).toBe(3);
+  });
+
+  it("survives one un-done day — a streak breaks only after a full miss", () => {
+    // Done through yesterday, nothing yet today: still alive, still 3.
+    const events = [daily("a", 0), daily("b", 1), daily("c", 2)];
+    const state = reduce(events, new Date(iso(3)));
+    expect(state.questStats.train.doneToday).toBe(false);
+    expect(state.questStats.train.streak).toBe(3);
+  });
+
+  it("breaks after a fully missed day but banks the best — history is never erased", () => {
+    const events = [daily("a", 0), daily("b", 1), daily("c", 2)];
+    const state = reduce(events, new Date(iso(5)));
+    expect(state.questStats.train.streak).toBe(0);
+    expect(state.questStats.train.bestStreak).toBe(3);
+  });
+
+  it("finds the best run even when it isn't the most recent one", () => {
+    const events = [
+      daily("a", 0),
+      daily("b", 1),
+      daily("c", 2),
+      daily("d", 3), // 4-day run
+      daily("e", 10),
+      daily("f", 11), // later 2-day run
+    ];
+    const state = reduce(events, new Date(iso(11)));
+    expect(state.questStats.train.streak).toBe(2);
+    expect(state.questStats.train.bestStreak).toBe(4);
+  });
+
+  it("counts a day only once, however many times it was tapped", () => {
+    const events = [daily("a", 0), daily("a2", 0), daily("b", 1)];
+    const state = reduce(events, new Date(iso(1)));
+    expect(state.questStats.train.streak).toBe(2);
+  });
+
+  it("drops a day from the streak when its only completion is undone", () => {
+    const events: SystemEvent[] = [
+      daily("a", 0),
+      daily("b", 1),
+      daily("c", 2),
+      {
+        type: "completion_retracted",
+        id: "u1",
+        timestamp: iso(2),
+        retractsEventId: "b",
+      },
+    ];
+    const state = reduce(events, new Date(iso(2)));
+    expect(state.questStats.train.streak).toBe(1);
+    expect(state.questStats.train.bestStreak).toBe(1);
+    expect(state.questStats.train.totalCompletions).toBe(2);
+  });
+
+  it("uses the player's local day, not UTC — a late-night completion counts today", () => {
+    // 23:00 UTC on day 0 is 04:30 on day 1 in IST (+330).
+    const lateUtc: SystemEvent = {
+      type: "quest_completed",
+      id: "late",
+      timestamp: new Date(Date.UTC(2026, 0, 1, 23, 0, 0)).toISOString(),
+      domain: "mind",
+      difficulty: "STANDARD",
+      questId: "read",
+    };
+    const nowIst = new Date(Date.UTC(2026, 0, 2, 5, 0, 0));
+    expect(reduce([lateUtc], nowIst, 330).questStats.read.doneToday).toBe(true);
+    // Same instants read in UTC put the completion on the previous day.
+    expect(reduce([lateUtc], nowIst, 0).questStats.read.doneToday).toBe(false);
+  });
+
+  it("keeps per-quest streaks independent", () => {
+    const state = reduce(
+      [
+        daily("a", 0),
+        daily("b", 1),
+        {
+          type: "quest_completed",
+          id: "r1",
+          timestamp: iso(1),
+          domain: "mind",
+          difficulty: "TRIVIAL",
+          questId: "read",
+        },
+      ],
+      new Date(iso(1)),
+    );
+    expect(state.questStats.train.streak).toBe(2);
+    expect(state.questStats.read.streak).toBe(1);
+  });
+});
+
 describe("tierForState — the Tier V honesty gate, tested directly", () => {
   it("caps at Tier IV when level qualifies for V but Integrity does not", () => {
     expect(tierForState(50, INTEGRITY_BASELINE)).toBe(4);
