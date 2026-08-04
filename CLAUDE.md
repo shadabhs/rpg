@@ -89,11 +89,15 @@ statically greps `reducer.ts`/`rules.ts` for exactly that on every test run.
   Every action re-derives the acting user from the session server-side; never
   trusts a client-supplied `user_id`. `completeQuest` explicitly refuses
   `weighty` quests — those must go through `verifyClaim`/`declineClaim`.
-- **`middleware.ts`** — refreshes the Supabase session on every request and
-  gates everything except `/login` and `/auth/*`. Deliberately added in a
-  later commit than the login page itself — flipping the gate on before
-  `/login` was proven to reach Supabase would have broken the live site behind
-  a wall nobody could get through.
+- **`proxy.ts`** — refreshes the Supabase session on every request and gates
+  everything except `/login` and `/auth/*`. Named `proxy.ts`/`proxy()`, not
+  `middleware.ts`/`middleware()` — Next.js 16 renamed the convention, and a
+  leftover `middleware.ts` is silently ignored (no error, no warning) once a
+  Next version fully drops the old name, which would kill the entire auth
+  gate with nothing surfacing it. Deliberately added in a later commit than
+  the login page itself — flipping the gate on before `/login` was proven to
+  reach Supabase would have broken the live site behind a wall nobody could
+  get through.
 
 ### Database (`db/`)
 
