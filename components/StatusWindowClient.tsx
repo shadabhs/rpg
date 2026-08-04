@@ -20,7 +20,13 @@ import type { QuestRow, EpicRow } from "@/db/mappers";
 import { EpicsPanel } from "@/components/EpicsPanel";
 import { ChroniclePanel } from "@/components/ChroniclePanel";
 import { TitlesPanel } from "@/components/TitlesPanel";
-import { chronicleEntries, buildLedger } from "@/lib/engine/chronicle";
+import { FirstRunRite } from "@/components/FirstRunRite";
+import {
+  chronicleEntries,
+  buildLedger,
+  buildDayReport,
+  buildWeekReport,
+} from "@/lib/engine/chronicle";
 import {
   completeQuest,
   undoCompletion,
@@ -52,6 +58,12 @@ export function StatusWindowClient({
   const [quests, setQuests] = useState<QuestRow[]>(initialQuests);
   const [epics, setEpics] = useState<EpicRow[]>(initialEpics);
   const [wornTitle, setWornTitle] = useState(title);
+  const [charName, setCharName] = useState(characterName);
+  // The rite runs once: a still-default name and an empty log means the
+  // System genuinely has no record of this person yet.
+  const [riteOpen, setRiteOpen] = useState(
+    characterName === "SUBJECT" && initialEvents.length === 0,
+  );
   const muted = useMuted();
   const tz = useTzOffsetMinutes();
 
@@ -96,6 +108,14 @@ export function StatusWindowClient({
     [events, questTitleById, tz],
   );
   const ledger = useMemo(() => buildLedger(events, tz), [events, tz]);
+  const dayReport = useMemo(
+    () => buildDayReport(events, new Date(), tz),
+    [events, tz],
+  );
+  const weekReport = useMemo(
+    () => buildWeekReport(events, new Date(), tz),
+    [events, tz],
+  );
 
   const domains = DOMAIN_KEYS.map((key) => ({
     key,
@@ -422,7 +442,7 @@ export function StatusWindowClient({
 
           <div className="min-w-0 flex-1">
             <p className="font-sys text-[10px] tracking-[0.22em] text-ink-faint">
-              {characterName}
+              {charName}
             </p>
             <p className="font-display text-2xl leading-tight text-ink">
               {wornTitle}
@@ -625,14 +645,31 @@ export function StatusWindowClient({
         delay={600}
       />
 
-      {/* ---------------- close-out ---------------- */}
+      {/* ---------------- close-out ritual ---------------- */}
       {dayClosed && (
         <Panel label="Day closed" delay={120} className="mt-3" tone="gold">
           <div className="px-4 py-5 text-center" data-testid="day-closed">
             <p className="font-sys text-[12px] leading-relaxed text-integrity">
               [ COMPLETE ] Nothing further is required of you today.
             </p>
-            <p className="mt-2 font-sys text-[11px] text-ink-dim">
+
+            {/* The day, stated. Cap-aware XP — never nominal arithmetic. */}
+            <p className="tnum mt-3 font-sys text-[11px] text-ink-dim">
+              {dayReport.completionsToday} done · {dayReport.xpToday} XP banked
+            </p>
+
+            {/* The week held against every week before it. The comparison
+                is the System's entire opinion. */}
+            {weekReport.thisWeek > 0 && (
+              <p className="tnum mt-1 font-sys text-[11px] text-ink-dim">
+                {weekReport.thisWeek} this week
+                {weekReport.isBestWeek
+                  ? " — your best week on record."
+                  : ` · best week: ${weekReport.bestWeek}`}
+              </p>
+            )}
+
+            <p className="mt-3 font-sys text-[11px] text-ink-faint">
               Session: {seconds}s. Close this and go live your life.
             </p>
           </div>
@@ -657,6 +694,13 @@ export function StatusWindowClient({
       </div>
 
       {/* ---------------- overlays ---------------- */}
+      {riteOpen && (
+        <FirstRunRite
+          onNamed={setCharName}
+          onDone={() => setRiteOpen(false)}
+        />
+      )}
+
       {verifying && (
         <VerificationScreen
           quest={verifying}

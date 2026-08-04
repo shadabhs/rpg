@@ -1,5 +1,5 @@
 import type { SystemEvent } from "./events";
-import { localDayKey } from "./reducer";
+import { localDayKey, localDayStart, reduce } from "./reducer";
 import {
   INTEGRITY_GAIN_ON_DECLINE,
   INTEGRITY_GAIN_ON_RETRACT,
@@ -149,4 +149,84 @@ export function buildLedger(
     milestonesClaimed,
     timesHeldBack,
   };
+}
+
+export type DayReport = {
+  /** XP actually banked today — cap-aware, computed as the difference of
+   *  two full replays, never nominal-sum arithmetic. */
+  xpToday: number;
+  completionsToday: number;
+};
+
+/** What today amounted to. Powers the close-out ritual. */
+export function buildDayReport(
+  events: SystemEvent[],
+  now: Date,
+  tzOffsetMinutes: number,
+): DayReport {
+  const dayStartMs = localDayStart(now, tzOffsetMinutes).getTime();
+  const beforeToday = events.filter(
+    (e) => new Date(e.timestamp).getTime() < dayStartMs,
+  );
+  const xpToday =
+    reduce(events, now, tzOffsetMinutes).totalXp -
+    reduce(beforeToday, now, tzOffsetMinutes).totalXp;
+
+  const voided = voidedIds(events);
+  const todayKey = localDayKey(now, tzOffsetMinutes);
+  const completionsToday = events.filter(
+    (e) =>
+      (e.type === "quest_completed" || e.type === "claim_verified") &&
+      !(e.type === "quest_completed" && voided.has(e.id)) &&
+      localDayKey(e.timestamp, tzOffsetMinutes) === todayKey,
+  ).length;
+
+  return { xpToday, completionsToday };
+}
+
+export type WeekReport = {
+  /** Real completions in the current local week (Mon-anchored ISO). */
+  thisWeek: number;
+  /** The best week on record, this one included. */
+  bestWeek: number;
+  isBestWeek: boolean;
+};
+
+/** Monday-anchored local week key, e.g. "2026-W32". */
+function weekKey(isoOrDate: string | Date, tzOffsetMinutes: number): string {
+  const d = new Date(
+    new Date(isoOrDate).getTime() + tzOffsetMinutes * 60_000,
+  );
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(
+    ((date.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7,
+  );
+  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+}
+
+/** This week held against every week before it. The comparison is the
+ *  System's entire opinion — no praise, just the two numbers. */
+export function buildWeekReport(
+  events: SystemEvent[],
+  now: Date,
+  tzOffsetMinutes: number,
+): WeekReport {
+  const voided = voidedIds(events);
+  const counts = new Map<string, number>();
+  for (const ev of events) {
+    if (
+      (ev.type === "quest_completed" && !voided.has(ev.id)) ||
+      ev.type === "claim_verified"
+    ) {
+      const wk = weekKey(ev.timestamp, tzOffsetMinutes);
+      counts.set(wk, (counts.get(wk) ?? 0) + 1);
+    }
+  }
+  const current = weekKey(now, tzOffsetMinutes);
+  const thisWeek = counts.get(current) ?? 0;
+  const bestWeek = Math.max(0, ...counts.values());
+  return { thisWeek, bestWeek, isBestWeek: thisWeek > 0 && thisWeek >= bestWeek };
 }

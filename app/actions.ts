@@ -277,6 +277,23 @@ export async function undoCompletion(
   return { ok: true };
 }
 
+/** The first-run rite: the player states their name. Cosmetic identity
+ *  only — nothing numeric moves here. */
+export async function setCharacterName(name: string): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  const trimmed = name.trim().toUpperCase();
+  if (!trimmed) return { ok: false, error: "A name is required." };
+  if (trimmed.length > 24) return { ok: false, error: "Twenty-four characters at most." };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ character_name: trimmed })
+    .eq("user_id", user.id);
+  if (error) return { ok: false, error: error.message };
+
+  return { ok: true };
+}
+
 /**
  * Wear an earned title. Validated server-side: the entitlement is
  * recomputed from the event log, so the client can request any string it

@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { reduce } from "./reducer";
-import { chronicleEntries, buildLedger } from "./chronicle";
+import {
+  chronicleEntries,
+  buildLedger,
+  buildDayReport,
+  buildWeekReport,
+} from "./chronicle";
 import { TITLE_DEFS, selectableTitles, DEFAULT_TITLE } from "./titles";
 import type { SystemEvent } from "./events";
 import type { DomainKey } from "./domains";
@@ -672,6 +677,55 @@ describe("titles — earned nouns, deterministic conditions", () => {
     expect(state.level).toBeGreaterThanOrEqual(2);
     expect(byKey["awakened"].earned(state, events)).toBe(true);
     expect(byKey["persistent"].earned(state, events)).toBe(state.level >= 5);
+  });
+});
+
+describe("day & week reports — the close-out's numbers, cap-aware", () => {
+  it("reports today's XP as the replay difference, so the weekly cap is honoured", () => {
+    // Yesterday fills the cap exactly (6 × SEVERE = 1500); today's HARD
+    // banks 0 real XP. Nominal arithmetic would claim 100.
+    const yesterday: SystemEvent[] = Array.from({ length: 6 }, (_, i) =>
+      completed(`y${i}`, 0, "craft", "SEVERE"),
+    );
+    const today = [completed("t1", 1, "craft", "HARD")];
+    const report = buildDayReport([...yesterday, ...today], new Date(iso(1)), 0);
+    expect(report.completionsToday).toBe(1);
+    expect(report.xpToday).toBe(0);
+  });
+
+  it("does not count an undone completion in today's tally", () => {
+    const events: SystemEvent[] = [
+      completed("a", 0, "vitality", "STANDARD"),
+      {
+        type: "completion_retracted",
+        id: "u1",
+        timestamp: iso(0),
+        retractsEventId: "a",
+      },
+    ];
+    const report = buildDayReport(events, new Date(iso(0)), 0);
+    expect(report.completionsToday).toBe(0);
+    expect(report.xpToday).toBe(0);
+  });
+
+  it("holds this week against the best week on record", () => {
+    // iso() days 0-2 (Jan 1-3 2026) land in one ISO week; day 10 in a later one.
+    const bigWeek: SystemEvent[] = [
+      completed("a", 0, "craft", "STANDARD"),
+      completed("b", 1, "craft", "STANDARD"),
+      completed("c", 2, "craft", "STANDARD"),
+    ];
+    const thisWeek = [completed("d", 10, "craft", "STANDARD")];
+    const report = buildWeekReport([...bigWeek, ...thisWeek], new Date(iso(10)), 0);
+    expect(report.thisWeek).toBe(1);
+    expect(report.bestWeek).toBe(3);
+    expect(report.isBestWeek).toBe(false);
+  });
+
+  it("calls a tied week a best week — equalling your best is not a failure", () => {
+    const events = [completed("a", 0, "craft", "STANDARD")];
+    const report = buildWeekReport(events, new Date(iso(0)), 0);
+    expect(report.isBestWeek).toBe(true);
   });
 });
 
