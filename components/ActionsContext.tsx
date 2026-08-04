@@ -34,6 +34,10 @@ export type ActionSet = {
   createEpic: typeof createEpic;
   chooseTitle: typeof chooseTitle;
   setCharacterName: typeof setCharacterName;
+  /** Re-pull server truth after a successful mutation. Absent in the real
+   *  set — the component falls back to router.refresh() — and a no-op in
+   *  the preview harness, whose "server" is in-memory client state. */
+  resync?: () => void;
 };
 
 const REAL_ACTIONS: ActionSet = {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Panel } from "@/components/Panel";
 import { Avatar } from "@/components/Avatar";
 import { StatBar } from "@/components/StatBar";
@@ -61,8 +62,16 @@ export function StatusWindowClient({
   );
   const muted = useMuted();
   const tz = useTzOffsetMinutes();
-  const { completeQuest, undoCompletion, verifyClaim, declineClaim } =
-    useActions();
+  const router = useRouter();
+  const actions = useActions();
+  const { completeQuest, undoCompletion, verifyClaim, declineClaim } = actions;
+  /** Re-pull server truth. The live QA pass found a state where the UI and
+   *  the database disagreed and NOTHING would reconcile them short of a
+   *  manual reload — the client never refetched. Now every successful
+   *  mutation triggers a refresh, and the adoption effect below folds the
+   *  fresh rows in. (The preview harness overrides this with a no-op: its
+   *  "server" is in-memory client state.) */
+  const resync = actions.resync ?? (() => router.refresh());
 
   const [verifying, setVerifying] = useState<QuestRow | null>(null);
   const [levelUp, setLevelUp] = useState<{ from: number; to: number } | null>(null);
@@ -81,10 +90,30 @@ export function StatusWindowClient({
   const toastId = useRef(0);
   const optimisticId = useRef(0);
   const prevTier = useRef<number | null>(null);
+  /** Mirrors `busy` for the adoption effect below — a ref, because making
+   *  the effect depend on `busy` would re-adopt STALE props the moment an
+   *  action finishes, wiping its own optimistic event before the refresh
+   *  lands. */
+  const busyRef = useRef<string | null>(null);
+  function markBusy(v: string | null) {
+    busyRef.current = v;
+    setBusy(v);
+  }
   function nextOptimisticId() {
     optimisticId.current += 1;
     return `optimistic-${optimisticId.current}`;
   }
+
+  // Adopt server truth whenever router.refresh() delivers fresh rows and
+  // no action is in flight. This is what makes any client/server drift
+  // self-healing instead of permanent: the QA pass proved a desync could
+  // otherwise survive until the player happened to reload.
+  useEffect(() => {
+    if (busyRef.current !== null) return;
+    setEvents(initialEvents);
+    setQuests(initialQuests);
+    setEpics(initialEpics);
+  }, [initialEvents, initialQuests, initialEpics]);
 
   useEffect(() => {
     const i = setInterval(() => setSeconds((s) => s + 1), 1000);
@@ -186,8 +215,15 @@ export function StatusWindowClient({
   async function handleQuestTap(quest: QuestRow) {
     if (busy) return;
     const isDaily = quest.cadence === "daily";
-    // A daily never leaves 'active'; "done today" is what gates it.
+    // A daily never leaves 'active'; "done today" is what gates it. Say
+    // so — the QA pass found the silent no-op read as "the app ignored
+    // me", which is worse than a refusal.
     if (isDaily ? state.questStats[quest.id]?.doneToday : quest.status !== "active") {
+      toast(
+        isDaily ? "Already done today." : "Already resolved.",
+        "var(--color-ink-faint)",
+        1600,
+      );
       return;
     }
     initAudio();
@@ -238,9 +274,9 @@ export function StatusWindowClient({
       buzz("complete");
     }
 
-    setBusy(quest.id);
+    markBusy(quest.id);
     const result = await completeQuest(quest.id, tz);
-    setBusy(null);
+    markBusy(null);
     if (!result.ok) {
       revert(optimisticId);
       if (!isDaily) {
@@ -252,6 +288,8 @@ export function StatusWindowClient({
       rejected(result.error);
       return;
     }
+
+    resync();
 
     // The loot reveal. XP was known before the tap (the honest mirror);
     // only the garnish is random, rolled server-side — the optimistic
@@ -303,6 +341,25 @@ export function StatusWindowClient({
       );
 
     const isDaily = quest.cadence === "daily";
+
+    // The display has nothing to void. Do NOT pantomime an undo the
+    // reducer can't see (the old path appended a retraction aimed at ""
+    // and showed a "−0 XP" façade while nothing changed). Ask the server —
+    // it resolves the real event from the log — then adopt its answer.
+    if (!target) {
+      markBusy(quest.id);
+      const result = await undoCompletion(quest.id, tz);
+      markBusy(null);
+      if (!result.ok) {
+        rejected(result.error);
+        return;
+      }
+      play("deny");
+      toast("[ RETRACTED ] The record stands corrected.", "var(--color-rust)");
+      resync();
+      return;
+    }
+
     const optimisticId = nextOptimisticId();
     if (!isDaily) {
       setQuests((qs) =>
@@ -320,9 +377,9 @@ export function StatusWindowClient({
     buzz("tap");
     toast(`[ RETRACTED ] −${before.totalXp - after.totalXp} XP`, "var(--color-rust)");
 
-    setBusy(quest.id);
+    markBusy(quest.id);
     const result = await undoCompletion(quest.id, tz);
-    setBusy(null);
+    markBusy(null);
     if (!result.ok) {
       revert(optimisticId);
       if (!isDaily) {
@@ -331,7 +388,9 @@ export function StatusWindowClient({
         );
       }
       rejected(result.error);
+      return;
     }
+    resync();
   }
 
   async function onConfirmVerify(evidence: string) {
@@ -363,13 +422,27 @@ export function StatusWindowClient({
         qs.map((q) => (q.id === quest.id ? { ...q, status: "active" } : q)),
       );
       rejected(result.error);
+      return;
     }
+    resync();
   }
 
   async function onNotYet() {
     const quest = verifying;
     if (!quest) return;
     setVerifying(null);
+
+    // The server will refuse a second decline for the same quest, and the
+    // reducer wouldn't grant Integrity for it anyway — so don't stage an
+    // optimistic "+0 INTEGRITY" flash that the rejection then has to
+    // claw back. Refuse locally with the server's own words.
+    const alreadyDeclined = events.some(
+      (e) => e.type === "claim_declined" && e.questId === quest.id,
+    );
+    if (alreadyDeclined) {
+      rejected("Already held back on this. Nothing further to record.");
+      return;
+    }
 
     const optimisticId = nextOptimisticId();
     const { before, after } = optimisticAppend({
@@ -387,7 +460,9 @@ export function StatusWindowClient({
     if (!result.ok) {
       revert(optimisticId);
       rejected(result.error);
+      return;
     }
+    resync();
   }
 
   function toggleMute() {
@@ -544,9 +619,11 @@ export function StatusWindowClient({
                 >
                   <button
                     onClick={() => handleQuestTap(q)}
-                    disabled={done || busy === q.id}
+                    disabled={busy === q.id}
                     data-testid={`quest-${q.id}`}
-                    className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-sys/5 disabled:opacity-40"
+                    className={`flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-sys/5 disabled:opacity-40 ${
+                      done ? "opacity-40" : ""
+                    }`}
                   >
                     <span
                       className="flex h-6 w-6 shrink-0 items-center justify-center border text-[11px]"
@@ -797,6 +874,20 @@ function NewQuestForm({
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Explicit, visible validation. The QA pass found the native
+    // `required` bubbles unreliable in some environments — a submit with
+    // empty fields just silently did nothing, which reads as the app
+    // being broken. The System states what's missing instead.
+    if (!title.trim()) {
+      setError("A quest needs a title.");
+      return;
+    }
+    if (!whenText.trim() || !whereText.trim()) {
+      setError(
+        "When and where are not optional. An intention without them is a wish.",
+      );
+      return;
+    }
     setSubmitting(true);
     setError("");
     const result = await createQuest({
@@ -841,6 +932,7 @@ function NewQuestForm({
   return (
     <form
       onSubmit={onSubmit}
+      noValidate
       className="animate-rise border-t border-edge/60 px-4 py-4"
     >
       {epics.length > 0 && (
@@ -875,7 +967,7 @@ function NewQuestForm({
           required
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Train — lower body"
+          placeholder="e.g. Train — lower body"
           className="mt-1.5 w-full border-b border-edge bg-transparent pb-1.5 font-sys text-sm text-ink placeholder:text-ink-faint focus:border-sys focus:outline-none"
         />
       </label>
@@ -926,7 +1018,7 @@ function NewQuestForm({
             required
             value={whenText}
             onChange={(e) => setWhenText(e.target.value)}
-            placeholder="06:40"
+            placeholder="e.g. 06:40"
             className="mt-1.5 w-full border-b border-edge bg-transparent pb-1.5 font-sys text-sm text-ink placeholder:text-ink-faint focus:border-sys focus:outline-none"
           />
         </label>
@@ -938,7 +1030,7 @@ function NewQuestForm({
             required
             value={whereText}
             onChange={(e) => setWhereText(e.target.value)}
-            placeholder="Gym"
+            placeholder="e.g. Gym"
             className="mt-1.5 w-full border-b border-edge bg-transparent pb-1.5 font-sys text-sm text-ink placeholder:text-ink-faint focus:border-sys focus:outline-none"
           />
         </label>

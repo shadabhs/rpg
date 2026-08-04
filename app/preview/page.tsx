@@ -20,7 +20,8 @@ export default async function PreviewPage({
   if (process.env.PREVIEW_MODE !== "1") notFound();
 
   const { scenario } = await searchParams;
-  const chosen: Scenario = scenario === "fresh" ? "fresh" : "seasoned";
+  const chosen: Scenario =
+    scenario === "fresh" || scenario === "reloaded" ? scenario : "seasoned";
 
   return <PreviewHarness scenario={chosen} />;
 }

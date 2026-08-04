@@ -36,7 +36,16 @@ function stubLoot(difficulty: Difficulty): { gold: number; item: string | null }
 const DAY = 86_400_000;
 const ago = (days: number) => new Date(Date.now() - days * DAY).toISOString();
 
-export type Scenario = "fresh" | "seasoned";
+export type Scenario = "fresh" | "seasoned" | "reloaded";
+
+/** PostgREST emits timestamptz as `2026-08-04T07:30:00.123456+00:00`, not
+ *  the `...Z` shape client-generated events use. The reloaded scenario
+ *  reproduces that exactly, because "works with Z strings" proved nothing
+ *  about the state a real hard reload hydrates from the database. */
+const pgTimestamp = (msAgo: number) => {
+  const d = new Date(Date.now() - msAgo);
+  return d.toISOString().replace("Z", "456+00:00");
+};
 
 function seed(scenario: Scenario): {
   quests: QuestRow[];
@@ -48,6 +57,45 @@ function seed(scenario: Scenario): {
   if (scenario === "fresh") {
     // Brand new: triggers the first-run rite.
     return { quests: [], epics: [], events: [], characterName: "SUBJECT", title: "The Unproven" };
+  }
+
+  if (scenario === "reloaded") {
+    // The exact state the live QA pass was in when UNDO failed: a daily
+    // quest completed TODAY, then a hard reload — so the only event is a
+    // DATABASE-shaped row (uuid id, PostgREST timestamp format), not a
+    // client-optimistic one.
+    return {
+      characterName: "SHADAB",
+      title: "The Unproven",
+      epics: [],
+      quests: [
+        {
+          id: "e1a7c9d2-4b3f-4a6e-9c1d-2f8b5a7e3c4d",
+          epic_id: null,
+          title: "Train — lower body",
+          domain: "vitality",
+          difficulty: "STANDARD",
+          when_text: "06:40",
+          where_text: "Gym",
+          weighty: false,
+          cadence: "daily",
+          requisites: null,
+          grants: null,
+          status: "active",
+        },
+      ],
+      events: [
+        {
+          type: "quest_completed",
+          id: "7f2b8c1a-9d4e-4f3a-b6c5-1e8d7a2f9b3c",
+          timestamp: pgTimestamp(35 * 60_000), // completed 35 min ago
+          domain: "vitality",
+          difficulty: "STANDARD",
+          questId: "e1a7c9d2-4b3f-4a6e-9c1d-2f8b5a7e3c4d",
+          gold: 5,
+        },
+      ],
+    };
   }
 
   const epics: EpicRow[] = [
@@ -157,6 +205,8 @@ export function PreviewHarness({ scenario }: { scenario: Scenario }) {
     createEpic: async () => ({ ...ok, id: `epic-${Math.random().toString(36).slice(2, 8)}` }),
     chooseTitle: async () => ok,
     setCharacterName: async () => ok,
+    // No server to resync from — harness truth lives in the client.
+    resync: () => {},
     // A deliberate failure path, driven by a magic title, so the harness
     // can prove the revert + [ REJECTED ] fault line actually work.
   } as ActionSet;
